@@ -2,7 +2,7 @@ package com.saishekar.jobtracker.common;
 
 import org.springframework.http.HttpStatus;
 
-/** Application-level error that maps cleanly onto an HTTP response. */
+/** Runtime exception carrying the HTTP status GlobalExceptionHandler should return. */
 public class ApiException extends RuntimeException {
 
     private final HttpStatus status;

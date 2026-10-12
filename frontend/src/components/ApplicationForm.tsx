@@ -1,10 +1,7 @@
-import { FormEvent, useState } from 'react';
-import {
-  ApplicationPayload,
-  ApplicationStatus,
-  JobApplication,
-  STATUSES,
-} from '../api/client';
+import { useState } from 'react';
+import type { FormEvent } from 'react';
+import { STATUSES } from '../api/client';
+import type { ApplicationPayload, ApplicationStatus, JobApplication } from '../api/client';
 
 interface Props {
   initial?: JobApplication | null;
@@ -12,7 +9,6 @@ interface Props {
   onCancel: () => void;
 }
 
-/** Add/edit form for one application. Reused for both flows. */
 export default function ApplicationForm({ initial, onSubmit, onCancel }: Props) {
   const [company, setCompany] = useState(initial?.company ?? '');
   const [title, setTitle] = useState(initial?.title ?? '');

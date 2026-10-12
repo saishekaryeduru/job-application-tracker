@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { AnalyticsSummary, api, STATUSES } from '../api/client';
+import { api, STATUSES } from '../api/client';
+import type { AnalyticsSummary } from '../api/client';
 import BarChart from '../components/BarChart';
 
 export default function AnalyticsPage() {

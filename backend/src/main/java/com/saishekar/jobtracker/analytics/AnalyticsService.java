@@ -14,10 +14,9 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * The numbers a job search actually runs on:
- *  - how the pipeline is distributed across statuses
- *  - how many applications went out per week (last 8 weeks)
- *  - the response rate: of everything applied to, how much moved past APPLIED
+ * Pipeline counts, applications per week, and response rate. Everything is
+ * computed from the applications table at request time — no cached counters
+ * to drift out of sync.
  */
 @Service
 @Transactional(readOnly = true)

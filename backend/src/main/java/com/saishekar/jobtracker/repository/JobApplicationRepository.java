@@ -20,6 +20,4 @@ public interface JobApplicationRepository extends JpaRepository<JobApplication, 
     long countByOwnerAndStatus(User owner, ApplicationStatus status);
 
     long countByOwnerAndAppliedDateBetween(User owner, LocalDate from, LocalDate to);
-
-    List<JobApplication> findByOwnerAndAppliedDateBetween(User owner, LocalDate from, LocalDate to);
 }

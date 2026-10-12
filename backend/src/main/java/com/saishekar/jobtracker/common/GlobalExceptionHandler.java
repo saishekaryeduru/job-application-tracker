@@ -1,5 +1,7 @@
 package com.saishekar.jobtracker.common;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.BadCredentialsException;
@@ -19,6 +21,8 @@ import java.util.stream.Collectors;
  */
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+
+    private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
     @ExceptionHandler(ApiException.class)
     public ResponseEntity<Map<String, Object>> handleApi(ApiException ex) {
@@ -41,7 +45,10 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(Exception.class)
     public ResponseEntity<Map<String, Object>> handleUnexpected(Exception ex) {
-        return body(HttpStatus.INTERNAL_SERVER_ERROR, "Unexpected error: " + ex.getMessage(), null);
+        // Log the detail, return a generic message — stack-level info doesn't
+        // belong in an API response.
+        log.error("Unhandled exception", ex);
+        return body(HttpStatus.INTERNAL_SERVER_ERROR, "Internal server error", null);
     }
 
     private ResponseEntity<Map<String, Object>> body(HttpStatus status, String message,

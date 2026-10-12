@@ -1,11 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
-import {
-  api,
-  ApplicationPayload,
-  ApplicationStatus,
-  JobApplication,
-  STATUSES,
-} from '../api/client';
+import { api, STATUSES } from '../api/client';
+import type { ApplicationPayload, ApplicationStatus, JobApplication } from '../api/client';
 import ApplicationForm from '../components/ApplicationForm';
 
 type Filter = ApplicationStatus | 'ALL';

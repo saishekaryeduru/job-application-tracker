@@ -11,16 +11,15 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
+import java.time.LocalDate;
+
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-/**
- * End-to-end API test on the H2-backed "test" profile:
- * register -> use the JWT -> track an application -> watch analytics move.
- */
+/** End-to-end API tests on the H2-backed "test" profile. */
 @SpringBootTest
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
@@ -52,7 +51,7 @@ class JobTrackerApiTest {
                   "salaryMax": 140000,
                   "notes": "Referral from a former teammate"
                 }
-                """.formatted(java.time.LocalDate.now());
+                """.formatted(LocalDate.now());
         MvcResult created = mockMvc.perform(post("/api/applications")
                         .header("Authorization", "Bearer " + token)
                         .contentType(MediaType.APPLICATION_JSON)
@@ -106,7 +105,7 @@ class JobTrackerApiTest {
                         .header("Authorization", "Bearer " + first)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"company\":\"Hidden Co\",\"title\":\"Engineer\",\"appliedDate\":\""
-                                + java.time.LocalDate.now() + "\"}"))
+                                + LocalDate.now() + "\"}"))
                 .andExpect(status().isCreated());
 
         mockMvc.perform(get("/api/applications").header("Authorization", "Bearer " + second))
@@ -134,7 +133,7 @@ class JobTrackerApiTest {
                         .header("Authorization", "Bearer " + token)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"company\":\"\",\"title\":\"Engineer\",\"appliedDate\":\""
-                                + java.time.LocalDate.now() + "\",\"salaryMin\":200000,\"salaryMax\":100000}"))
+                                + LocalDate.now() + "\",\"salaryMin\":200000,\"salaryMax\":100000}"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.fieldErrors.company").exists());
     }

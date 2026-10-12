@@ -1,4 +1,5 @@
-import { FormEvent, useState } from 'react';
+import { useState } from 'react';
+import type { FormEvent } from 'react';
 import { api, session } from '../api/client';
 
 export default function LoginPage({ onLoggedIn }: { onLoggedIn: () => void }) {
