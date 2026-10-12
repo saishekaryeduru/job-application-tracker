@@ -1,4 +1,4 @@
-# Job Tracker — Smart Job Application Tracking & Analytics Platform
+# Job Tracker
 
 A full-stack web app for running a serious job search like a pipeline instead
 of a pile of browser tabs. You record every application, move it through a
@@ -55,9 +55,24 @@ backend/   Spring Boot API
 ```
 
 The backend is a layered monolith on purpose: controllers stay thin, services
-own the rules (e.g. salary-range validation, owner scoping), and analytics is
-computed from repository queries rather than cached counters — the numbers
-can't drift from the data.
+own the rules (e.g. salary-range validation, owner scoping), repositories are
+the only code that talks to JPA.
+
+## Design decisions
+
+- **Stateless JWT sessions.** No session store and no sticky sessions; any
+  instance can serve any request. The tradeoff is revocation — a token stays
+  valid until it expires — so the expiry is kept to 24 hours and passwords
+  are bcrypt-hashed.
+- **Analytics computed at request time.** Counts, weekly volume, and the
+  response rate come from repository queries against the applications table
+  on every call, so the numbers can't drift from the data. That costs a few
+  extra count queries per analytics request; at single-user scale that is
+  the right side of the tradeoff. If this ever served real traffic, weekly
+  counts are the first thing I'd cache.
+- **Hand-rolled SVG charts.** Two small components (~60 lines) instead of a
+  chart dependency. No tooltips or animations, but also nothing extra to
+  ship, pin, or audit for two bar charts.
 
 ## Running it locally
 
@@ -101,6 +116,9 @@ cd backend && mvn test     # JUnit + MockMvc suite on the H2 test profile
 cd frontend && npm run build   # type-check + production build
 ```
 
+GitHub Actions runs both on every push and pull request
+(see `.github/workflows/ci.yml`).
+
 ## API overview
 
 All endpoints except `/api/auth/*` require `Authorization: Bearer <token>`.
@@ -121,11 +139,6 @@ All endpoints except `/api/auth/*` require `Authorization: Bearer <token>`.
 | GET | `/api/analytics/by-status` | Counts per pipeline status |
 | GET | `/api/analytics/weekly?weeks=8` | Applications per week |
 | GET | `/api/analytics/response-rate` | Applied vs. responded and the rate |
-
-## Screenshots
-
-<!-- TODO: add screenshots of the dashboard and analytics views -->
-_Dashboard and analytics screenshots coming with the v1.1 polish pass._
 
 ## Roadmap (v2 ideas)
 
