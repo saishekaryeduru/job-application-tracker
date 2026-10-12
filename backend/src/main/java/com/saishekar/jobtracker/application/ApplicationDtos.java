@@ -1,0 +1,51 @@
+package com.saishekar.jobtracker.application;
+
+import com.saishekar.jobtracker.model.ApplicationStatus;
+import com.saishekar.jobtracker.model.JobApplication;
+import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
+
+import java.time.LocalDate;
+
+public final class ApplicationDtos {
+
+    private ApplicationDtos() {
+    }
+
+    public record ApplicationRequest(
+            @NotBlank @Size(max = 160) String company,
+            @NotBlank @Size(max = 160) String title,
+            @Size(max = 160) String location,
+            @Size(max = 500) String jobUrl,
+            ApplicationStatus status,
+            @NotNull LocalDate appliedDate,
+            @Min(0) Integer salaryMin,
+            @Min(0) Integer salaryMax,
+            String notes) {
+    }
+
+    public record ApplicationResponse(
+            Long id,
+            String company,
+            String title,
+            String location,
+            String jobUrl,
+            ApplicationStatus status,
+            LocalDate appliedDate,
+            Integer salaryMin,
+            Integer salaryMax,
+            String notes) {
+
+        public static ApplicationResponse from(JobApplication app) {
+            return new ApplicationResponse(
+                    app.getId(), app.getCompany(), app.getTitle(), app.getLocation(),
+                    app.getJobUrl(), app.getStatus(), app.getAppliedDate(),
+                    app.getSalaryMin(), app.getSalaryMax(), app.getNotes());
+        }
+    }
+
+    public record StatusUpdateRequest(@NotNull ApplicationStatus status) {
+    }
+}
