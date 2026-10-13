@@ -20,6 +20,9 @@ because "how is the search going?" deserves a data answer, not a feeling.
   status changes.
 - **Status pipeline & filtering** — filter the dashboard by any of the seven
   statuses.
+- **Pagination & search** — the dashboard list is paged (20 per page, newest
+  first) and searchable: `q` matches company, role title, or location as a
+  case-insensitive substring, and composes with the status filter.
 - **Interviews** — schedule rounds (recruiter screen, technical, onsite…)
   against an application, with interviewer, time, outcome, and notes.
 - **Analytics** — counts by status, applications per week for the last
@@ -70,6 +73,10 @@ the only code that talks to JPA.
   extra count queries per analytics request; at single-user scale that is
   the right side of the tradeoff. If this ever served real traffic, weekly
   counts are the first thing I'd cache.
+- **Stable pagination.** The list sorts by applied date descending with the
+  record id as a tie-breaker. Without the second key, applications that share
+  a date could appear on two pages (or none) as the data changes underneath
+  the pager.
 - **Hand-rolled SVG charts.** Two small components (~60 lines) instead of a
   chart dependency. No tooltips or animations, but also nothing extra to
   ship, pin, or audit for two bar charts.
@@ -127,7 +134,7 @@ All endpoints except `/api/auth/*` require `Authorization: Bearer <token>`.
 |--------|----------|-------------|
 | POST | `/api/auth/register` | Create an account, returns a JWT |
 | POST | `/api/auth/login` | Log in, returns a JWT |
-| GET | `/api/applications?status=APPLIED` | List my applications (optional status filter) |
+| GET | `/api/applications?status=APPLIED&q=acme&page=0&size=20` | List my applications, paged: `{content, page, size, totalElements, totalPages}`; optional status filter and case-insensitive search over company/title/location; `size` must be 1–100 |
 | POST | `/api/applications` | Create an application |
 | GET | `/api/applications/{id}` | Get one application |
 | PUT | `/api/applications/{id}` | Update an application |
@@ -146,7 +153,6 @@ All endpoints except `/api/auth/*` require `Authorization: Bearer <token>`.
 - CSV import/export
 - Interview prep notes with Markdown rendering
 - Docker Compose for the full stack
-- Pagination + full-text search on the dashboard
 
 ## License
 

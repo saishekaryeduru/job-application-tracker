@@ -24,7 +24,11 @@ button {
 
 button:disabled {
   opacity: 0.6;
-  cursor: wait;
+  cursor: not-allowed;
+}
+
+.search-box {
+  min-width: 260px;
 }
 
 button.secondary {

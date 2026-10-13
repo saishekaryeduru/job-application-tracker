@@ -6,10 +6,11 @@ import com.saishekar.jobtracker.model.ApplicationStatus;
 import com.saishekar.jobtracker.model.JobApplication;
 import com.saishekar.jobtracker.model.User;
 import com.saishekar.jobtracker.repository.JobApplicationRepository;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
-import java.util.List;
 
 @Service
 @Transactional
@@ -21,12 +22,23 @@ public class ApplicationService {
         this.applications = applications;
     }
 
+    public static final int MAX_PAGE_SIZE = 100;
+
     @Transactional(readOnly = true)
-    public List<JobApplication> list(User owner, ApplicationStatus status) {
-        if (status == null) {
-            return applications.findByOwnerOrderByAppliedDateDesc(owner);
+    public Page<JobApplication> list(User owner, ApplicationStatus status, String query,
+                                       int page, int size) {
+        if (page < 0) {
+            throw ApiException.badRequest("page must be 0 or greater");
         }
-        return applications.findByOwnerAndStatusOrderByAppliedDateDesc(owner, status);
+        if (size < 1 || size > MAX_PAGE_SIZE) {
+            throw ApiException.badRequest("size must be between 1 and " + MAX_PAGE_SIZE);
+        }
+        String trimmedQuery = query == null || query.isBlank() ? null : query.trim();
+        // The id tie-breaker keeps the order stable when several applications
+        // share an applied date, so rows cannot drift between pages.
+        Sort sort = Sort.by(Sort.Direction.DESC, "appliedDate")
+                .and(Sort.by(Sort.Direction.DESC, "id"));
+        return applications.search(owner, status, trimmedQuery, PageRequest.of(page, size, sort));
     }
 
     @Transactional(readOnly = true)

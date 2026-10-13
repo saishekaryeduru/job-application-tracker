@@ -1,5 +1,6 @@
 package com.saishekar.jobtracker.application;
 
+import com.saishekar.jobtracker.application.ApplicationDtos.ApplicationPage;
 import com.saishekar.jobtracker.application.ApplicationDtos.ApplicationRequest;
 import com.saishekar.jobtracker.application.ApplicationDtos.ApplicationResponse;
 import com.saishekar.jobtracker.application.ApplicationDtos.StatusUpdateRequest;
@@ -19,8 +20,6 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.util.List;
-
 @RestController
 @RequestMapping("/api/applications")
 public class ApplicationController {
@@ -34,11 +33,12 @@ public class ApplicationController {
     }
 
     @GetMapping
-    public List<ApplicationResponse> list(
-            @RequestParam(required = false) ApplicationStatus status) {
-        return service.list(currentUser.require(), status).stream()
-                .map(ApplicationResponse::from)
-                .toList();
+    public ApplicationPage list(
+            @RequestParam(required = false) ApplicationStatus status,
+            @RequestParam(required = false) String q,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        return ApplicationPage.from(service.list(currentUser.require(), status, q, page, size));
     }
 
     @GetMapping("/{id}")

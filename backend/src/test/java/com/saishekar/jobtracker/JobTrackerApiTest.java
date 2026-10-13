@@ -65,11 +65,12 @@ class JobTrackerApiTest {
         // It shows up in the list, and the status filter works.
         mockMvc.perform(get("/api/applications").header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.length()").value(1));
+                .andExpect(jsonPath("$.content.length()").value(1))
+                .andExpect(jsonPath("$.totalElements").value(1));
         mockMvc.perform(get("/api/applications?status=REJECTED")
                         .header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.length()").value(0));
+                .andExpect(jsonPath("$.content.length()").value(0));
 
         // Move it to SCREENING: that counts as an employer response.
         mockMvc.perform(patch("/api/applications/" + id + "/status")
@@ -110,7 +111,60 @@ class JobTrackerApiTest {
 
         mockMvc.perform(get("/api/applications").header("Authorization", "Bearer " + second))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.length()").value(0));
+                .andExpect(jsonPath("$.content.length()").value(0));
+
+        // Search is owner-scoped too: the second user cannot find it by name.
+        mockMvc.perform(get("/api/applications?q=Hidden").header("Authorization", "Bearer " + second))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalElements").value(0));
+    }
+
+    @Test
+    void searchAndPagination() throws Exception {
+        String token = register("pager@example.com");
+        createApplication(token, "Acme Robotics", "Backend Engineer", "Austin, TX", "APPLIED");
+        createApplication(token, "Beta Health", "Frontend Engineer", "Remote - US", "APPLIED");
+        createApplication(token, "Acme Robotics", "Platform Engineer", "Denver, CO", "SAVED");
+
+        // Search matches company, title, and location, case-insensitively.
+        mockMvc.perform(get("/api/applications?q=acme").header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalElements").value(2));
+        mockMvc.perform(get("/api/applications?q=frontend").header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalElements").value(1))
+                .andExpect(jsonPath("$.content[0].company").value("Beta Health"));
+        mockMvc.perform(get("/api/applications?q=denver").header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalElements").value(1));
+
+        // Search composes with the status filter.
+        mockMvc.perform(get("/api/applications?q=acme&status=SAVED")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalElements").value(1))
+                .andExpect(jsonPath("$.content[0].title").value("Platform Engineer"));
+
+        // Pages are disjoint and the totals describe the full result set.
+        mockMvc.perform(get("/api/applications?size=2&page=0")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content.length()").value(2))
+                .andExpect(jsonPath("$.page").value(0))
+                .andExpect(jsonPath("$.size").value(2))
+                .andExpect(jsonPath("$.totalElements").value(3))
+                .andExpect(jsonPath("$.totalPages").value(2));
+        mockMvc.perform(get("/api/applications?size=2&page=1")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content.length()").value(1))
+                .andExpect(jsonPath("$.page").value(1));
+
+        // Out-of-range paging parameters are a client error, not a 500.
+        mockMvc.perform(get("/api/applications?size=0").header("Authorization", "Bearer " + token))
+                .andExpect(status().isBadRequest());
+        mockMvc.perform(get("/api/applications?page=-1").header("Authorization", "Bearer " + token))
+                .andExpect(status().isBadRequest());
     }
 
     @Test
@@ -136,6 +190,24 @@ class JobTrackerApiTest {
                                 + LocalDate.now() + "\",\"salaryMin\":200000,\"salaryMax\":100000}"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.fieldErrors.company").exists());
+    }
+
+    private void createApplication(String token, String company, String title, String location,
+                                   String status) throws Exception {
+        String body = """
+                {
+                  "company": "%s",
+                  "title": "%s",
+                  "location": "%s",
+                  "status": "%s",
+                  "appliedDate": "%s"
+                }
+                """.formatted(company, title, location, status, LocalDate.now());
+        mockMvc.perform(post("/api/applications")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isCreated());
     }
 
     private String register(String email) throws Exception {

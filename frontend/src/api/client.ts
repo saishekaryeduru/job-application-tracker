@@ -45,6 +45,21 @@ export interface ApplicationPayload {
   notes?: string;
 }
 
+export interface ApplicationPage {
+  content: JobApplication[];
+  page: number;
+  size: number;
+  totalElements: number;
+  totalPages: number;
+}
+
+export interface ListApplicationsParams {
+  status?: ApplicationStatus;
+  query?: string;
+  page?: number;
+  size?: number;
+}
+
 export interface AnalyticsSummary {
   byStatus: Record<ApplicationStatus, number>;
   responseRate: { applied: number; responded: number; rate: number };
@@ -96,8 +111,14 @@ export const api = {
       body: JSON.stringify({ email, password }),
     }),
 
-  listApplications: (status?: ApplicationStatus) =>
-    request<JobApplication[]>(`/api/applications${status ? `?status=${status}` : ''}`),
+  listApplications: (params: ListApplicationsParams = {}) => {
+    const search = new URLSearchParams();
+    if (params.status) search.set('status', params.status);
+    if (params.query?.trim()) search.set('q', params.query.trim());
+    search.set('page', String(params.page ?? 0));
+    search.set('size', String(params.size ?? 20));
+    return request<ApplicationPage>(`/api/applications?${search.toString()}`);
+  },
 
   createApplication: (payload: ApplicationPayload) =>
     request<JobApplication>('/api/applications', {

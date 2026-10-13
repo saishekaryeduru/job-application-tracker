@@ -5,20 +5,47 @@ import ApplicationForm from '../components/ApplicationForm';
 
 type Filter = ApplicationStatus | 'ALL';
 
+const PAGE_SIZE = 20;
+
 export default function DashboardPage() {
   const [applications, setApplications] = useState<JobApplication[]>([]);
   const [filter, setFilter] = useState<Filter>('ALL');
+  const [searchInput, setSearchInput] = useState('');
+  const [query, setQuery] = useState('');
+  const [page, setPage] = useState(0);
+  const [totalPages, setTotalPages] = useState(0);
+  const [totalElements, setTotalElements] = useState(0);
   const [editing, setEditing] = useState<JobApplication | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Debounce the search box so typing does not fire a request per keystroke.
+  useEffect(() => {
+    const timer = setTimeout(() => setQuery(searchInput), 300);
+    return () => clearTimeout(timer);
+  }, [searchInput]);
+
+  // A new filter or search term restarts the list from the first page.
+  useEffect(() => {
+    setPage(0);
+  }, [filter, query]);
+
   const reload = useCallback(async () => {
     try {
-      setApplications(await api.listApplications(filter === 'ALL' ? undefined : filter));
+      const result = await api.listApplications({
+        status: filter === 'ALL' ? undefined : filter,
+        query: query || undefined,
+        page,
+        size: PAGE_SIZE,
+      });
+      setApplications(result.content);
+      setTotalPages(result.totalPages);
+      setTotalElements(result.totalElements);
+      setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load applications');
     }
-  }, [filter]);
+  }, [filter, query, page]);
 
   useEffect(() => {
     void reload();
@@ -46,6 +73,8 @@ export default function DashboardPage() {
     await reload();
   }
 
+  const isFiltering = filter !== 'ALL' || query.trim() !== '';
+
   return (
     <section>
       <div className="row space-between">
@@ -60,6 +89,15 @@ export default function DashboardPage() {
                 </option>
               ))}
             </select>
+          </label>
+          <label className="search-box">
+            Search&nbsp;
+            <input
+              type="search"
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
+              placeholder="Company, role, or location"
+            />
           </label>
         </div>
         <button
@@ -149,13 +187,42 @@ export default function DashboardPage() {
             {applications.length === 0 && (
               <tr>
                 <td colSpan={6} className="muted">
-                  Nothing here yet — add your first application.
+                  {isFiltering
+                    ? 'No applications match the current filter and search.'
+                    : 'Nothing here yet — add your first application.'}
                 </td>
               </tr>
             )}
           </tbody>
         </table>
       </div>
+
+      {totalElements > 0 && (
+        <div className="row space-between">
+          <span className="muted">
+            {totalElements} application{totalElements === 1 ? '' : 's'}
+            {totalPages > 1 ? ` — page ${page + 1} of ${totalPages}` : ''}
+          </span>
+          {totalPages > 1 && (
+            <span className="row">
+              <button
+                className="secondary"
+                disabled={page === 0}
+                onClick={() => setPage((p) => Math.max(0, p - 1))}
+              >
+                Previous
+              </button>
+              <button
+                className="secondary"
+                disabled={page + 1 >= totalPages}
+                onClick={() => setPage((p) => p + 1)}
+              >
+                Next
+              </button>
+            </span>
+          )}
+        </div>
+      )}
     </section>
   );
 }

@@ -7,7 +7,10 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 
+import org.springframework.data.domain.Page;
+
 import java.time.LocalDate;
+import java.util.List;
 
 public final class ApplicationDtos {
 
@@ -43,6 +46,24 @@ public final class ApplicationDtos {
                     app.getId(), app.getCompany(), app.getTitle(), app.getLocation(),
                     app.getJobUrl(), app.getStatus(), app.getAppliedDate(),
                     app.getSalaryMin(), app.getSalaryMax(), app.getNotes());
+        }
+    }
+
+    /** One page of the dashboard list, with the totals the pager needs. */
+    public record ApplicationPage(
+            List<ApplicationResponse> content,
+            int page,
+            int size,
+            long totalElements,
+            int totalPages) {
+
+        public static ApplicationPage from(Page<JobApplication> page) {
+            return new ApplicationPage(
+                    page.getContent().stream().map(ApplicationResponse::from).toList(),
+                    page.getNumber(),
+                    page.getSize(),
+                    page.getTotalElements(),
+                    page.getTotalPages());
         }
     }
 
