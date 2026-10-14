@@ -10,6 +10,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.time.LocalDate;
+import java.util.List;
 import java.util.Optional;
 
 public interface JobApplicationRepository extends JpaRepository<JobApplication, Long> {
@@ -34,6 +35,9 @@ public interface JobApplicationRepository extends JpaRepository<JobApplication, 
                                 Pageable pageable);
 
     Optional<JobApplication> findByIdAndOwner(Long id, User owner);
+
+    /** Every application the owner has, in the dashboard's stable order — used by CSV export. */
+    List<JobApplication> findAllByOwnerOrderByAppliedDateDescIdDesc(User owner);
 
     long countByOwnerAndStatus(User owner, ApplicationStatus status);
 

@@ -141,5 +141,46 @@ export const api = {
   deleteApplication: (id: number) =>
     request<void>(`/api/applications/${id}`, { method: 'DELETE' }),
 
+  // The export is a file download, not JSON, so it cannot go through request().
+  exportApplications: async (): Promise<Blob> => {
+    const token = session.token();
+    const response = await fetch('/api/applications/export', {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    if (response.status === 401) {
+      session.clear();
+      throw new Error('Session expired — please log in again.');
+    }
+    if (!response.ok) throw new Error(`Export failed (${response.status})`);
+    return response.blob();
+  },
+
+  // FormData sets its own multipart Content-Type; request() would force JSON.
+  importApplications: async (file: File): Promise<{ imported: number }> => {
+    const token = session.token();
+    const form = new FormData();
+    form.append('file', file);
+    const response = await fetch('/api/applications/import', {
+      method: 'POST',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      body: form,
+    });
+    if (response.status === 401) {
+      session.clear();
+      throw new Error('Session expired — please log in again.');
+    }
+    if (!response.ok) {
+      let message = `Import failed (${response.status})`;
+      try {
+        const body = await response.json();
+        if (body?.message) message = body.message;
+      } catch {
+        /* keep the default message */
+      }
+      throw new Error(message);
+    }
+    return (await response.json()) as { imported: number };
+  },
+
   analytics: () => request<AnalyticsSummary>('/api/analytics/summary'),
 };

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { api, STATUSES } from '../api/client';
 import type { ApplicationPayload, ApplicationStatus, JobApplication } from '../api/client';
 import ApplicationForm from '../components/ApplicationForm';
@@ -18,6 +18,8 @@ export default function DashboardPage() {
   const [editing, setEditing] = useState<JobApplication | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const importInput = useRef<HTMLInputElement>(null);
 
   // Debounce the search box so typing does not fire a request per keystroke.
   useEffect(() => {
@@ -73,6 +75,37 @@ export default function DashboardPage() {
     await reload();
   }
 
+  async function handleExport() {
+    setError(null);
+    setNotice(null);
+    try {
+      const blob = await api.exportApplications();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = 'job-applications.csv';
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Export failed');
+    }
+  }
+
+  async function handleImport(file: File) {
+    setError(null);
+    setNotice(null);
+    try {
+      const result = await api.importApplications(file);
+      setNotice(
+        `Imported ${result.imported} application${result.imported === 1 ? '' : 's'} from ${file.name}.`,
+      );
+      setPage(0);
+      await reload();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Import failed');
+    }
+  }
+
   const isFiltering = filter !== 'ALL' || query.trim() !== '';
 
   return (
@@ -100,17 +133,38 @@ export default function DashboardPage() {
             />
           </label>
         </div>
-        <button
-          onClick={() => {
-            setEditing(null);
-            setShowForm((v) => !v);
-          }}
-        >
-          {showForm ? 'Close form' : '+ Add application'}
-        </button>
+        <div className="row">
+          <button className="secondary" onClick={() => void handleExport()}>
+            Export CSV
+          </button>
+          <button className="secondary" onClick={() => importInput.current?.click()}>
+            Import CSV
+          </button>
+          <input
+            ref={importInput}
+            type="file"
+            accept=".csv,text/csv"
+            hidden
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              // Reset the input so picking the same file again re-triggers the import.
+              e.target.value = '';
+              if (file) void handleImport(file);
+            }}
+          />
+          <button
+            onClick={() => {
+              setEditing(null);
+              setShowForm((v) => !v);
+            }}
+          >
+            {showForm ? 'Close form' : '+ Add application'}
+          </button>
+        </div>
       </div>
 
       {error && <p className="error">{error}</p>}
+      {notice && <p className="notice">{notice}</p>}
 
       {showForm && (
         <ApplicationForm

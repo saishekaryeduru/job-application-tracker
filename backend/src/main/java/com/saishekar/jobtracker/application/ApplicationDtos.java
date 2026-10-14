@@ -69,4 +69,7 @@ public final class ApplicationDtos {
 
     public record StatusUpdateRequest(@NotNull ApplicationStatus status) {
     }
+
+    public record CsvImportResult(int imported) {
+    }
 }

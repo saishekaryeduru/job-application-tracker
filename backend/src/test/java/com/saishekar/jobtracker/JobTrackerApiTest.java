@@ -7,15 +7,21 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
+import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 
+import static org.hamcrest.Matchers.containsString;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -165,6 +171,86 @@ class JobTrackerApiTest {
                 .andExpect(status().isBadRequest());
         mockMvc.perform(get("/api/applications?page=-1").header("Authorization", "Bearer " + token))
                 .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void csvExportImportRoundTrip() throws Exception {
+        String exporter = register("exporter@example.com");
+        createApplication(exporter, "Acme, Inc.", "Backend Engineer", "Austin, TX", "APPLIED");
+        mockMvc.perform(post("/api/applications")
+                        .header("Authorization", "Bearer " + exporter)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"company\":\"Beta Health\",\"title\":\"Frontend Engineer\","
+                                + "\"status\":\"SCREENING\",\"appliedDate\":\"" + LocalDate.now()
+                                + "\",\"salaryMin\":100000,\"salaryMax\":130000,"
+                                + "\"notes\":\"Referred by \\\"Sam\\\", follow up Friday\"}"))
+                .andExpect(status().isCreated());
+
+        MvcResult exported = mockMvc.perform(get("/api/applications/export")
+                        .header("Authorization", "Bearer " + exporter))
+                .andExpect(status().isOk())
+                .andExpect(content().contentTypeCompatibleWith("text/csv"))
+                .andExpect(header().string("Content-Disposition",
+                        containsString("job-applications.csv")))
+                .andReturn();
+        String csv = exported.getResponse().getContentAsString(StandardCharsets.UTF_8);
+
+        // Fields with commas and quotes are RFC 4180-escaped in the export.
+        org.junit.jupiter.api.Assertions.assertTrue(csv.startsWith(
+                "company,title,location,jobUrl,status,appliedDate,salaryMin,salaryMax,notes"), csv);
+        org.junit.jupiter.api.Assertions.assertTrue(csv.contains("\"Acme, Inc.\""), csv);
+        org.junit.jupiter.api.Assertions.assertTrue(
+                csv.contains("\"Referred by \"\"Sam\"\", follow up Friday\""), csv);
+
+        // The export imports cleanly into another account, values intact.
+        String importer = register("importer@example.com");
+        MockMultipartFile file = new MockMultipartFile(
+                "file", "job-applications.csv", "text/csv", csv.getBytes(StandardCharsets.UTF_8));
+        mockMvc.perform(multipart("/api/applications/import")
+                        .file(file)
+                        .header("Authorization", "Bearer " + importer))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.imported").value(2));
+        mockMvc.perform(get("/api/applications?q=acme").header("Authorization", "Bearer " + importer))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalElements").value(1))
+                .andExpect(jsonPath("$.content[0].company").value("Acme, Inc."));
+        mockMvc.perform(get("/api/applications?q=beta").header("Authorization", "Bearer " + importer))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[0].status").value("SCREENING"))
+                .andExpect(jsonPath("$.content[0].salaryMin").value(100000))
+                .andExpect(jsonPath("$.content[0].notes")
+                        .value("Referred by \"Sam\", follow up Friday"));
+    }
+
+    @Test
+    void csvImportRejectsBadFilesWithoutSavingAnything() throws Exception {
+        String token = register("csvbad@example.com");
+        String badRows = """
+                company,title,location,jobUrl,status,appliedDate,salaryMin,salaryMax,notes
+                Good Co,Engineer,,,,APPLIED,%s,,,
+                ,Engineer,,,,NOT_A_STATUS,not-a-date,,,
+                """.formatted(LocalDate.now());
+        mockMvc.perform(multipart("/api/applications/import")
+                        .file(new MockMultipartFile("file", "bad.csv", "text/csv",
+                                badRows.getBytes(StandardCharsets.UTF_8)))
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value(containsString("row 3")))
+                .andExpect(jsonPath("$.message").value(containsString("company is required")));
+
+        // A header that is not the export format is refused as well.
+        mockMvc.perform(multipart("/api/applications/import")
+                        .file(new MockMultipartFile("file", "wrong.csv", "text/csv",
+                                "name,role\nAcme,Engineer\n".getBytes(StandardCharsets.UTF_8)))
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value(containsString("missing column")));
+
+        // Both failures are atomic: even the valid row was not saved.
+        mockMvc.perform(get("/api/applications").header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalElements").value(0));
     }
 
     @Test

@@ -23,6 +23,10 @@ because "how is the search going?" deserves a data answer, not a feeling.
 - **Pagination & search** — the dashboard list is paged (20 per page, newest
   first) and searchable: `q` matches company, role title, or location as a
   case-insensitive substring, and composes with the status filter.
+- **CSV import/export** — export every application to a CSV file (RFC 4180
+  quoting) and import the same format back. Import is all-or-nothing: every
+  row is validated first, errors are reported with their spreadsheet row
+  numbers, and a bad file saves nothing.
 - **Interviews** — schedule rounds (recruiter screen, technical, onsite…)
   against an application, with interviewer, time, outcome, and notes.
 - **Analytics** — counts by status, applications per week for the last
@@ -80,6 +84,12 @@ the only code that talks to JPA.
 - **Hand-rolled SVG charts.** Two small components (~60 lines) instead of a
   chart dependency. No tooltips or animations, but also nothing extra to
   ship, pin, or audit for two bar charts.
+- **No CSV library.** The export/import format is nine flat columns, so the
+  RFC 4180 quoting and parsing are ~80 lines of standard-library code
+  instead of a dependency. The interesting decision is the import contract,
+  not the parsing: validate the whole file up front, report errors by
+  spreadsheet row number, and save nothing if any row is bad — a partial
+  import would leave the tracker silently out of sync with the file.
 
 ## Running it locally
 
@@ -140,6 +150,8 @@ All endpoints except `/api/auth/*` require `Authorization: Bearer <token>`.
 | PUT | `/api/applications/{id}` | Update an application |
 | PATCH | `/api/applications/{id}/status` | Move it through the pipeline |
 | DELETE | `/api/applications/{id}` | Delete an application |
+| GET | `/api/applications/export` | Download all my applications as CSV (the import format) |
+| POST | `/api/applications/import` | Import a CSV file (multipart field `file`); all-or-nothing, max 1,000 rows, returns `{imported}` |
 | GET | `/api/applications/{id}/interviews` | List interview rounds |
 | POST | `/api/applications/{id}/interviews` | Schedule an interview round |
 | GET | `/api/analytics/summary` | byStatus + responseRate + weekly, in one call |
@@ -150,7 +162,6 @@ All endpoints except `/api/auth/*` require `Authorization: Bearer <token>`.
 ## Roadmap (v2 ideas)
 
 - Reminders for stale applications ("no movement in 10 days")
-- CSV import/export
 - Interview prep notes with Markdown rendering
 - Docker Compose for the full stack
 

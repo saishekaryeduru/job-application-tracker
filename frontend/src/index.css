@@ -89,6 +89,14 @@ label {
   padding: 0.5rem 0.75rem;
 }
 
+.notice {
+  color: #065f46;
+  background: #ecfdf5;
+  border: 1px solid #a7f3d0;
+  border-radius: 8px;
+  padding: 0.5rem 0.75rem;
+}
+
 .row {
   display: flex;
   gap: 0.5rem;
