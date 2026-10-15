@@ -4,6 +4,7 @@ import com.saishekar.jobtracker.application.ApplicationDtos.ApplicationPage;
 import com.saishekar.jobtracker.application.ApplicationDtos.ApplicationRequest;
 import com.saishekar.jobtracker.application.ApplicationDtos.ApplicationResponse;
 import com.saishekar.jobtracker.application.ApplicationDtos.CsvImportResult;
+import com.saishekar.jobtracker.application.ApplicationDtos.StaleApplicationResponse;
 import com.saishekar.jobtracker.application.ApplicationDtos.StatusUpdateRequest;
 import com.saishekar.jobtracker.common.ApiException;
 import com.saishekar.jobtracker.model.ApplicationStatus;
@@ -28,6 +29,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.util.List;
 
 @RestController
 @RequestMapping("/api/applications")
@@ -66,6 +68,12 @@ public class ApplicationController {
         } catch (IOException ex) {
             throw ApiException.badRequest("CSV import failed: the uploaded file could not be read");
         }
+    }
+
+    @GetMapping("/stale")
+    public List<StaleApplicationResponse> stale(
+            @RequestParam(defaultValue = "10") int days) {
+        return service.stale(currentUser.require(), days);
     }
 
     @GetMapping

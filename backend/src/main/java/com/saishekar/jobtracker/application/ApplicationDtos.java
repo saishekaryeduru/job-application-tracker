@@ -9,6 +9,8 @@ import jakarta.validation.constraints.Size;
 
 import org.springframework.data.domain.Page;
 
+import java.time.Duration;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
 
@@ -71,5 +73,27 @@ public final class ApplicationDtos {
     }
 
     public record CsvImportResult(int imported) {
+    }
+
+    /**
+     * An application that has gone quiet: still in an active pipeline stage
+     * but untouched for at least the requested number of days.
+     */
+    public record StaleApplicationResponse(
+            Long id,
+            String company,
+            String title,
+            String location,
+            ApplicationStatus status,
+            LocalDate appliedDate,
+            Instant updatedAt,
+            long daysStale) {
+
+        public static StaleApplicationResponse from(JobApplication app, Instant now) {
+            long daysStale = Duration.between(app.getUpdatedAt(), now).toDays();
+            return new StaleApplicationResponse(
+                    app.getId(), app.getCompany(), app.getTitle(), app.getLocation(),
+                    app.getStatus(), app.getAppliedDate(), app.getUpdatedAt(), daysStale);
+        }
     }
 }

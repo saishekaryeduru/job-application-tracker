@@ -27,6 +27,9 @@ because "how is the search going?" deserves a data answer, not a feeling.
   quoting) and import the same format back. Import is all-or-nothing: every
   row is validated first, errors are reported with their spreadsheet row
   numbers, and a bad file saves nothing.
+- **Stale-application reminders** — the dashboard flags applications in
+  APPLIED, SCREENING, or INTERVIEWING that have had no movement in 10+ days,
+  most stale first, so quiet roles get a follow-up instead of being forgotten.
 - **Interviews** — schedule rounds (recruiter screen, technical, onsite…)
   against an application, with interviewer, time, outcome, and notes.
 - **Analytics** — counts by status, applications per week for the last
@@ -84,6 +87,12 @@ the only code that talks to JPA.
 - **Hand-rolled SVG charts.** Two small components (~60 lines) instead of a
   chart dependency. No tooltips or animations, but also nothing extra to
   ship, pin, or audit for two bar charts.
+- **Staleness is measured from `updatedAt`, not the applied date.** Every
+  edit and status change refreshes `updatedAt`, so an application the user
+  followed up on yesterday does not keep flagging just because it was
+  submitted weeks ago. Only active stages (APPLIED, SCREENING,
+  INTERVIEWING) can go stale: SAVED has not been submitted, and OFFER /
+  REJECTED / WITHDRAWN need no follow-up nudge.
 - **No CSV library.** The export/import format is nine flat columns, so the
   RFC 4180 quoting and parsing are ~80 lines of standard-library code
   instead of a dependency. The interesting decision is the import contract,
@@ -146,6 +155,7 @@ All endpoints except `/api/auth/*` require `Authorization: Bearer <token>`.
 | POST | `/api/auth/login` | Log in, returns a JWT |
 | GET | `/api/applications?status=APPLIED&q=acme&page=0&size=20` | List my applications, paged: `{content, page, size, totalElements, totalPages}`; optional status filter and case-insensitive search over company/title/location; `size` must be 1–100 |
 | POST | `/api/applications` | Create an application |
+| GET | `/api/applications/stale?days=10` | My stale applications: active stages with no update in at least `days` days (1–90, default 10), most stale first, each with `daysStale` |
 | GET | `/api/applications/{id}` | Get one application |
 | PUT | `/api/applications/{id}` | Update an application |
 | PATCH | `/api/applications/{id}/status` | Move it through the pipeline |
@@ -161,7 +171,6 @@ All endpoints except `/api/auth/*` require `Authorization: Bearer <token>`.
 
 ## Roadmap (v2 ideas)
 
-- Reminders for stale applications ("no movement in 10 days")
 - Interview prep notes with Markdown rendering
 - Docker Compose for the full stack
 

@@ -89,6 +89,16 @@ label {
   padding: 0.5rem 0.75rem;
 }
 
+.stale-card {
+  border-color: #fcd34d;
+  background: #fffbeb;
+}
+
+.stale-list {
+  margin: 0.5rem 0;
+  padding-left: 1.25rem;
+}
+
 .notice {
   color: #065f46;
   background: #ecfdf5;

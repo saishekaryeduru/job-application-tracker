@@ -12,8 +12,11 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
+import java.lang.reflect.Field;
 import java.nio.charset.StandardCharsets;
+import java.time.Instant;
 import java.time.LocalDate;
+import java.time.temporal.ChronoUnit;
 
 import static org.hamcrest.Matchers.containsString;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -36,6 +39,12 @@ class JobTrackerApiTest {
 
     @Autowired
     private ObjectMapper objectMapper;
+
+    @Autowired
+    private com.saishekar.jobtracker.repository.JobApplicationRepository applicationRepository;
+
+    @Autowired
+    private com.saishekar.jobtracker.repository.UserRepository userRepository;
 
     @Test
     void registerCreateAndAnalyze() throws Exception {
@@ -251,6 +260,63 @@ class JobTrackerApiTest {
         mockMvc.perform(get("/api/applications").header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.totalElements").value(0));
+    }
+
+    @Test
+    void staleApplicationsFlagQuietActiveApplicationsOnly() throws Exception {
+        String token = register("stale@example.com");
+        createApplication(token, "Quiet Co", "Backend Engineer", "Austin, TX", "APPLIED");
+        createApplication(token, "Fresh Co", "Backend Engineer", "Denver, CO", "APPLIED");
+        createApplication(token, "Closed Co", "Backend Engineer", "Remote - US", "REJECTED");
+        createApplication(token, "Saved Co", "Backend Engineer", "Remote - US", "SAVED");
+
+        // Age Quiet Co and Closed Co past the default threshold by moving
+        // their updatedAt back; Fresh Co and Saved Co keep today's timestamp.
+        var owner = userRepository.findByEmail("stale@example.com").orElseThrow();
+        Field updatedAt = com.saishekar.jobtracker.model.JobApplication.class
+                .getDeclaredField("updatedAt");
+        updatedAt.setAccessible(true);
+        for (var app : applicationRepository.findAllByOwnerOrderByAppliedDateDescIdDesc(owner)) {
+            if (app.getCompany().equals("Quiet Co") || app.getCompany().equals("Closed Co")) {
+                updatedAt.set(app, Instant.now().minus(15, ChronoUnit.DAYS));
+                applicationRepository.save(app);
+            }
+        }
+
+        // Only the quiet, still-active application is flagged, with its age.
+        mockMvc.perform(get("/api/applications/stale").header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(1))
+                .andExpect(jsonPath("$[0].company").value("Quiet Co"))
+                .andExpect(jsonPath("$[0].status").value("APPLIED"))
+                .andExpect(jsonPath("$[0].daysStale").value(15));
+
+        // A shorter window catches the same application; the fresh one is
+        // still excluded because it was touched today.
+        mockMvc.perform(get("/api/applications/stale?days=1")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(1));
+
+        // A window longer than the application's age returns nothing.
+        mockMvc.perform(get("/api/applications/stale?days=30")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(0));
+
+        // Out-of-range thresholds are a client error, not a 500.
+        mockMvc.perform(get("/api/applications/stale?days=0")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isBadRequest());
+        mockMvc.perform(get("/api/applications/stale?days=91")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isBadRequest());
+
+        // Stale results are owner-scoped.
+        String other = register("stale-other@example.com");
+        mockMvc.perform(get("/api/applications/stale").header("Authorization", "Bearer " + other))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(0));
     }
 
     @Test

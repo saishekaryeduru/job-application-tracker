@@ -60,6 +60,11 @@ export interface ListApplicationsParams {
   size?: number;
 }
 
+export interface StaleApplication extends JobApplication {
+  updatedAt: string;
+  daysStale: number;
+}
+
 export interface AnalyticsSummary {
   byStatus: Record<ApplicationStatus, number>;
   responseRate: { applied: number; responded: number; rate: number };
@@ -181,6 +186,9 @@ export const api = {
     }
     return (await response.json()) as { imported: number };
   },
+
+  staleApplications: (days = 10) =>
+    request<StaleApplication[]>(`/api/applications/stale?days=${days}`),
 
   analytics: () => request<AnalyticsSummary>('/api/analytics/summary'),
 };

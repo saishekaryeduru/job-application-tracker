@@ -9,7 +9,9 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.time.Instant;
 import java.time.LocalDate;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -38,6 +40,13 @@ public interface JobApplicationRepository extends JpaRepository<JobApplication, 
 
     /** Every application the owner has, in the dashboard's stable order — used by CSV export. */
     List<JobApplication> findAllByOwnerOrderByAppliedDateDescIdDesc(User owner);
+
+    /**
+     * Applications in one of the given statuses that have not been updated
+     * since the cutoff, most stale first — the stale-reminder query.
+     */
+    List<JobApplication> findByOwnerAndStatusInAndUpdatedAtBeforeOrderByUpdatedAtAsc(
+            User owner, Collection<ApplicationStatus> statuses, Instant cutoff);
 
     long countByOwnerAndStatus(User owner, ApplicationStatus status);
 

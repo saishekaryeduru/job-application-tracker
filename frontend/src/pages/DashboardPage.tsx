@@ -1,6 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { api, STATUSES } from '../api/client';
-import type { ApplicationPayload, ApplicationStatus, JobApplication } from '../api/client';
+import type {
+  ApplicationPayload,
+  ApplicationStatus,
+  JobApplication,
+  StaleApplication,
+} from '../api/client';
 import ApplicationForm from '../components/ApplicationForm';
 
 type Filter = ApplicationStatus | 'ALL';
@@ -15,6 +20,7 @@ export default function DashboardPage() {
   const [page, setPage] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
   const [totalElements, setTotalElements] = useState(0);
+  const [stale, setStale] = useState<StaleApplication[]>([]);
   const [editing, setEditing] = useState<JobApplication | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -34,15 +40,21 @@ export default function DashboardPage() {
 
   const reload = useCallback(async () => {
     try {
-      const result = await api.listApplications({
-        status: filter === 'ALL' ? undefined : filter,
-        query: query || undefined,
-        page,
-        size: PAGE_SIZE,
-      });
+      const [result, staleResult] = await Promise.all([
+        api.listApplications({
+          status: filter === 'ALL' ? undefined : filter,
+          query: query || undefined,
+          page,
+          size: PAGE_SIZE,
+        }),
+        // The stale list is independent of the dashboard filter: a quiet
+        // application needs a nudge even when the list is filtered away.
+        api.staleApplications().catch(() => [] as StaleApplication[]),
+      ]);
       setApplications(result.content);
       setTotalPages(result.totalPages);
       setTotalElements(result.totalElements);
+      setStale(staleResult);
       setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load applications');
@@ -165,6 +177,26 @@ export default function DashboardPage() {
 
       {error && <p className="error">{error}</p>}
       {notice && <p className="notice">{notice}</p>}
+
+      {stale.length > 0 && (
+        <div className="card stale-card" role="status">
+          <strong>
+            {stale.length} application{stale.length === 1 ? '' : 's'} with no movement in
+            10+ days
+          </strong>
+          <ul className="stale-list">
+            {stale.map((app) => (
+              <li key={app.id}>
+                {app.company} — {app.title} ({app.status}, {app.daysStale} days since last
+                update)
+              </li>
+            ))}
+          </ul>
+          <span className="muted small">
+            Worth a follow-up, a status check, or closing out if the role has gone quiet.
+          </span>
+        </div>
+      )}
 
       {showForm && (
         <ApplicationForm

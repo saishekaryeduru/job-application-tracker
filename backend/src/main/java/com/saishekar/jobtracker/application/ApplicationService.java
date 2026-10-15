@@ -12,6 +12,10 @@ import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
+import java.util.List;
+
 @Service
 @Transactional
 public class ApplicationService {
@@ -23,6 +27,19 @@ public class ApplicationService {
     }
 
     public static final int MAX_PAGE_SIZE = 100;
+
+    public static final int DEFAULT_STALE_DAYS = 10;
+    public static final int MAX_STALE_DAYS = 90;
+
+    /**
+     * Stages where silence from the employer is worth acting on. SAVED has
+     * not been submitted yet, OFFER is a decision rather than a follow-up,
+     * and REJECTED / WITHDRAWN are closed.
+     */
+    private static final List<ApplicationStatus> STALE_STATUSES = List.of(
+            ApplicationStatus.APPLIED,
+            ApplicationStatus.SCREENING,
+            ApplicationStatus.INTERVIEWING);
 
     @Transactional(readOnly = true)
     public Page<JobApplication> list(User owner, ApplicationStatus status, String query,
@@ -39,6 +56,26 @@ public class ApplicationService {
         Sort sort = Sort.by(Sort.Direction.DESC, "appliedDate")
                 .and(Sort.by(Sort.Direction.DESC, "id"));
         return applications.search(owner, status, trimmedQuery, PageRequest.of(page, size, sort));
+    }
+
+    /**
+     * Applications that have had no movement for at least {@code days} days.
+     * Movement is tracked by {@code updatedAt}, which every edit and status
+     * change refreshes via {@link JobApplication#touch()}; the applied date
+     * alone would keep flagging an application the user acted on yesterday.
+     */
+    @Transactional(readOnly = true)
+    public List<ApplicationDtos.StaleApplicationResponse> stale(User owner, int days) {
+        if (days < 1 || days > MAX_STALE_DAYS) {
+            throw ApiException.badRequest("days must be between 1 and " + MAX_STALE_DAYS);
+        }
+        Instant now = Instant.now();
+        Instant cutoff = now.minus(days, ChronoUnit.DAYS);
+        return applications
+                .findByOwnerAndStatusInAndUpdatedAtBeforeOrderByUpdatedAtAsc(owner, STALE_STATUSES, cutoff)
+                .stream()
+                .map(app -> ApplicationDtos.StaleApplicationResponse.from(app, now))
+                .toList();
     }
 
     @Transactional(readOnly = true)
