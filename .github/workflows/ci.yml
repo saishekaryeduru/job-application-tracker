@@ -33,3 +33,13 @@ jobs:
         run: |
           npm ci
           npm run build
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate the Compose file and build both images
+        run: |
+          cp .env.example .env
+          docker compose config --quiet
+          docker compose build

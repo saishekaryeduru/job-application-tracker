@@ -1,0 +1,53 @@
+# Full-stack local run: PostgreSQL, the Spring Boot API, and the React
+# frontend served by nginx (which also proxies /api to the backend, so the
+# browser only ever talks to one origin -- the same setup the Vite dev
+# server proxy provides in development).
+#
+# Usage:
+#   cp .env.example .env   # then set a real JWT_SECRET
+#   docker compose up --build
+# Frontend: http://localhost:5173   API: http://localhost:8080
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: jobtracker
+      POSTGRES_USER: jobtracker
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-jobtracker}
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U jobtracker -d jobtracker"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    # Not published by default: only the backend needs the database.
+    expose:
+      - "5432"
+
+  backend:
+    build: ./backend
+    environment:
+      DB_URL: jdbc:postgresql://db:5432/jobtracker
+      DB_USERNAME: jobtracker
+      DB_PASSWORD: ${DB_PASSWORD:-jobtracker}
+      # Falls back to the same dev-only default as application.yml so the
+      # stack runs out of the box locally; set a real secret in .env for
+      # anything beyond a throwaway run.
+      JWT_SECRET: ${JWT_SECRET:-dev-only-secret-change-me-dev-only-secret-change-me-0123456789}
+    ports:
+      - "8080:8080"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "5173:80"
+    depends_on:
+      - backend
+
+volumes:
+  db-data:

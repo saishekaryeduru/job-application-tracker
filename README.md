@@ -37,6 +37,8 @@ because "how is the search going?" deserves a data answer, not a feeling.
   "applied" into screening/interviewing/offer/rejected).
 - **Consistent API errors** — one JSON error shape everywhere, with per-field
   details on validation failures.
+- **One-command run** — Docker Compose brings up PostgreSQL, the API, and
+  the frontend together; no local Java, Node, or Postgres install needed.
 
 ## Tech stack
 
@@ -99,10 +101,30 @@ the only code that talks to JPA.
   not the parsing: validate the whole file up front, report errors by
   spreadsheet row number, and save nothing if any row is bad — a partial
   import would leave the tracker silently out of sync with the file.
+- **One origin in every environment.** In development the Vite server
+  proxies `/api` to the backend; in the Compose stack nginx does the same
+  job. The frontend always calls relative paths, so there is no CORS
+  configuration to keep in sync and no API URL baked into the bundle at
+  build time — the same image can run against any backend host.
 
 ## Running it locally
 
-### Backend
+### Docker Compose (full stack)
+
+```bash
+cp .env.example .env   # set a real JWT_SECRET before anything non-local
+docker compose up --build
+```
+
+Open `http://localhost:5173`. Compose starts PostgreSQL (with a health
+check the backend waits on), the API on port 8080, and the frontend served
+by nginx on port 5173. nginx proxies `/api` to the backend, so the browser
+only ever talks to one origin — no CORS setup and no build-time API URL.
+Data survives restarts in the `db-data` volume; `docker compose down -v`
+removes it. The manual setup below is the alternative for working on one
+tier at a time.
+
+### Backend (manual)
 
 Production-style (PostgreSQL + Flyway):
 
@@ -124,7 +146,7 @@ mvn spring-boot:run -Dspring-boot.run.profiles=dev
 
 The API listens on `http://localhost:8080`.
 
-### Frontend
+### Frontend (manual)
 
 ```bash
 cd frontend
@@ -142,7 +164,8 @@ cd backend && mvn test     # JUnit + MockMvc suite on the H2 test profile
 cd frontend && npm run build   # type-check + production build
 ```
 
-GitHub Actions runs both on every push and pull request
+GitHub Actions runs both on every push and pull request, and also builds
+the two Docker images so the Compose stack can't rot silently
 (see `.github/workflows/ci.yml`).
 
 ## API overview
@@ -172,7 +195,6 @@ All endpoints except `/api/auth/*` require `Authorization: Bearer <token>`.
 ## Roadmap (v2 ideas)
 
 - Interview prep notes with Markdown rendering
-- Docker Compose for the full stack
 
 ## License
 
