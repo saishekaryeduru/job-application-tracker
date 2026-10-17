@@ -32,6 +32,11 @@ because "how is the search going?" deserves a data answer, not a feeling.
   most stale first, so quiet roles get a follow-up instead of being forgotten.
 - **Interviews** — schedule rounds (recruiter screen, technical, onsite…)
   against an application, with interviewer, time, outcome, and notes.
+  Rounds can be edited after the fact, not just created.
+- **Interview prep notes** — a Markdown prep sheet per round: focus areas,
+  stories to rehearse, questions to ask the panel. Edited as source with a
+  live preview; rendering supports headings, lists, emphasis, code, and
+  links from a safe subset, so stored notes can never inject markup.
 - **Analytics** — counts by status, applications per week for the last
   8 weeks, and response rate (share of applications that moved past
   "applied" into screening/interviewing/offer/rejected).
@@ -101,6 +106,15 @@ the only code that talks to JPA.
   not the parsing: validate the whole file up front, report errors by
   spreadsheet row number, and save nothing if any row is bad — a partial
   import would leave the tracker silently out of sync with the file.
+- **Prep notes are stored as Markdown source, never HTML.** The API saves
+  and returns the source text; the frontend renders it with a small
+  hand-rolled renderer (~130 lines, same reasoning as the SVG charts) that
+  builds React elements from a safe subset — headings, lists, emphasis,
+  code, blockquotes, http(s) links. Because user text only ever lands in
+  React text nodes and `dangerouslySetInnerHTML` is never used, a prep note
+  cannot become stored XSS, and there is no sanitizer dependency to keep
+  current. The cost is a smaller Markdown dialect, which is the right trade
+  for notes one person writes for themselves.
 - **One origin in every environment.** In development the Vite server
   proxies `/api` to the backend; in the Compose stack nginx does the same
   job. The frontend always calls relative paths, so there is no CORS
@@ -185,8 +199,9 @@ All endpoints except `/api/auth/*` require `Authorization: Bearer <token>`.
 | DELETE | `/api/applications/{id}` | Delete an application |
 | GET | `/api/applications/export` | Download all my applications as CSV (the import format) |
 | POST | `/api/applications/import` | Import a CSV file (multipart field `file`); all-or-nothing, max 1,000 rows, returns `{imported}` |
-| GET | `/api/applications/{id}/interviews` | List interview rounds |
+| GET | `/api/applications/{id}/interviews` | List interview rounds, including Markdown `prepNotes` |
 | POST | `/api/applications/{id}/interviews` | Schedule an interview round |
+| PUT | `/api/applications/{id}/interviews/{interviewId}` | Update a round (schedule, outcome, notes, prep notes; `prepNotes` capped at 20,000 chars) |
 | GET | `/api/analytics/summary` | byStatus + responseRate + weekly, in one call |
 | GET | `/api/analytics/by-status` | Counts per pipeline status |
 | GET | `/api/analytics/weekly?weeks=8` | Applications per week |
@@ -194,7 +209,7 @@ All endpoints except `/api/auth/*` require `Authorization: Bearer <token>`.
 
 ## Roadmap (v2 ideas)
 
-- Interview prep notes with Markdown rendering
+- Interview reminders and .ics calendar export for scheduled rounds
 
 ## License
 

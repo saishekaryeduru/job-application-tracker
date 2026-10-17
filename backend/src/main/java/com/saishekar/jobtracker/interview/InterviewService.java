@@ -1,6 +1,7 @@
 package com.saishekar.jobtracker.interview;
 
 import com.saishekar.jobtracker.application.ApplicationService;
+import com.saishekar.jobtracker.common.ApiException;
 import com.saishekar.jobtracker.interview.InterviewDtos.InterviewRequest;
 import com.saishekar.jobtracker.model.Interview;
 import com.saishekar.jobtracker.model.JobApplication;
@@ -32,11 +33,33 @@ public class InterviewService {
     public Interview create(User owner, Long applicationId, InterviewRequest request) {
         JobApplication app = applications.get(owner, applicationId);
         Interview interview = new Interview(app, request.round().trim(), request.scheduledAt());
+        apply(interview, request);
+        return interviews.save(interview);
+    }
+
+    public Interview update(User owner, Long applicationId, Long interviewId,
+                            InterviewRequest request) {
+        // Resolving the application through the owner first is what keeps one
+        // user from updating another user's interview by guessing its id:
+        // the interview lookup is scoped to that already-authorized parent.
+        JobApplication app = applications.get(owner, applicationId);
+        Interview interview = interviews.findByIdAndApplication(interviewId, app)
+                .orElseThrow(() -> ApiException.notFound("Interview"));
+        interview.setRound(request.round().trim());
+        interview.setScheduledAt(request.scheduledAt());
+        apply(interview, request);
+        return interviews.save(interview);
+    }
+
+    private void apply(Interview interview, InterviewRequest request) {
         interview.setInterviewer(request.interviewer());
+        // A null outcome means "not stated": on create the entity default
+        // (SCHEDULED) stands, on update the recorded outcome is kept rather
+        // than silently reset by a client that only meant to edit prep notes.
         if (request.outcome() != null) {
             interview.setOutcome(request.outcome());
         }
         interview.setNotes(request.notes());
-        return interviews.save(interview);
+        interview.setPrepNotes(request.prepNotes());
     }
 }

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
 import { api, STATUSES } from '../api/client';
 import type {
   ApplicationPayload,
@@ -7,6 +7,7 @@ import type {
   StaleApplication,
 } from '../api/client';
 import ApplicationForm from '../components/ApplicationForm';
+import InterviewPanel from '../components/InterviewPanel';
 
 type Filter = ApplicationStatus | 'ALL';
 
@@ -22,6 +23,7 @@ export default function DashboardPage() {
   const [totalElements, setTotalElements] = useState(0);
   const [stale, setStale] = useState<StaleApplication[]>([]);
   const [editing, setEditing] = useState<JobApplication | null>(null);
+  const [expandedId, setExpandedId] = useState<number | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -223,7 +225,8 @@ export default function DashboardPage() {
           </thead>
           <tbody>
             {applications.map((app) => (
-              <tr key={app.id}>
+              <Fragment key={app.id}>
+              <tr>
                 <td>
                   {app.jobUrl ? (
                     <a href={app.jobUrl} target="_blank" rel="noreferrer">
@@ -257,6 +260,12 @@ export default function DashboardPage() {
                 <td className="row">
                   <button
                     className="secondary"
+                    onClick={() => setExpandedId(expandedId === app.id ? null : app.id)}
+                  >
+                    {expandedId === app.id ? 'Hide interviews' : 'Interviews'}
+                  </button>
+                  <button
+                    className="secondary"
                     onClick={() => {
                       setEditing(app);
                       setShowForm(true);
@@ -269,6 +278,14 @@ export default function DashboardPage() {
                   </button>
                 </td>
               </tr>
+              {expandedId === app.id && (
+                <tr>
+                  <td colSpan={6}>
+                    <InterviewPanel applicationId={app.id} />
+                  </td>
+                </tr>
+              )}
+              </Fragment>
             ))}
             {applications.length === 0 && (
               <tr>

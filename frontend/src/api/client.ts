@@ -65,6 +65,37 @@ export interface StaleApplication extends JobApplication {
   daysStale: number;
 }
 
+export type InterviewOutcome = 'SCHEDULED' | 'PASSED' | 'FAILED' | 'CANCELLED' | 'NO_SHOW';
+
+export const INTERVIEW_OUTCOMES: InterviewOutcome[] = [
+  'SCHEDULED',
+  'PASSED',
+  'FAILED',
+  'CANCELLED',
+  'NO_SHOW',
+];
+
+export interface Interview {
+  id: number;
+  applicationId: number;
+  round: string;
+  scheduledAt: string;
+  interviewer: string | null;
+  outcome: InterviewOutcome;
+  notes: string | null;
+  /** Markdown source, rendered client-side by the Markdown component. */
+  prepNotes: string | null;
+}
+
+export interface InterviewPayload {
+  round: string;
+  scheduledAt: string;
+  interviewer?: string;
+  outcome?: InterviewOutcome;
+  notes?: string;
+  prepNotes?: string;
+}
+
 export interface AnalyticsSummary {
   byStatus: Record<ApplicationStatus, number>;
   responseRate: { applied: number; responded: number; rate: number };
@@ -189,6 +220,21 @@ export const api = {
 
   staleApplications: (days = 10) =>
     request<StaleApplication[]>(`/api/applications/stale?days=${days}`),
+
+  listInterviews: (applicationId: number) =>
+    request<Interview[]>(`/api/applications/${applicationId}/interviews`),
+
+  createInterview: (applicationId: number, payload: InterviewPayload) =>
+    request<Interview>(`/api/applications/${applicationId}/interviews`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+
+  updateInterview: (applicationId: number, interviewId: number, payload: InterviewPayload) =>
+    request<Interview>(`/api/applications/${applicationId}/interviews/${interviewId}`, {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    }),
 
   analytics: () => request<AnalyticsSummary>('/api/analytics/summary'),
 };

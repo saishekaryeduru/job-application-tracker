@@ -23,6 +23,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -342,6 +343,77 @@ class JobTrackerApiTest {
                                 + LocalDate.now() + "\",\"salaryMin\":200000,\"salaryMax\":100000}"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.fieldErrors.company").exists());
+    }
+
+    @Test
+    void interviewPrepNotesRoundTripAndUpdate() throws Exception {
+        String token = register("prep@example.com");
+
+        MvcResult created = mockMvc.perform(post("/api/applications")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"company\":\"Prep Co\",\"title\":\"Backend Engineer\",\"appliedDate\":\""
+                                + LocalDate.now() + "\"}"))
+                .andExpect(status().isCreated())
+                .andReturn();
+        long appId = objectMapper.readTree(created.getResponse().getContentAsString())
+                .get("id").asLong();
+
+        // Prep notes are stored as Markdown source and returned verbatim.
+        String prep = "## Focus\\n- Review **caching** tradeoffs\\n- Rehearse the migration story";
+        MvcResult interview = mockMvc.perform(post("/api/applications/" + appId + "/interviews")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"round\":\"Technical deep dive\",\"scheduledAt\":\"2030-02-01T15:00:00Z\","
+                                + "\"prepNotes\":\"" + prep + "\"}"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.prepNotes").value(prep.replace("\\n", "\n")))
+                .andReturn();
+        long interviewId = objectMapper.readTree(interview.getResponse().getContentAsString())
+                .get("id").asLong();
+
+        // Update rewrites the prep notes and records the outcome; an update
+        // that omits the outcome must not reset it afterwards.
+        String revised = "# Revised\\nShip the **second** draft";
+        mockMvc.perform(put("/api/applications/" + appId + "/interviews/" + interviewId)
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"round\":\"Technical deep dive\",\"scheduledAt\":\"2030-02-01T16:00:00Z\","
+                                + "\"outcome\":\"PASSED\",\"prepNotes\":\"" + revised + "\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.outcome").value("PASSED"))
+                .andExpect(jsonPath("$.prepNotes").value(revised.replace("\\n", "\n")));
+        mockMvc.perform(put("/api/applications/" + appId + "/interviews/" + interviewId)
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"round\":\"Technical deep dive\",\"scheduledAt\":\"2030-02-01T16:00:00Z\","
+                                + "\"prepNotes\":\"" + revised + "\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.outcome").value("PASSED"));
+
+        // The list endpoint serves the stored notes to the owner.
+        mockMvc.perform(get("/api/applications/" + appId + "/interviews")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].prepNotes").value(revised.replace("\\n", "\n")));
+
+        // Another user gets a 404, not the interview: no existence leak.
+        String other = register("prep-other@example.com");
+        mockMvc.perform(put("/api/applications/" + appId + "/interviews/" + interviewId)
+                        .header("Authorization", "Bearer " + other)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"round\":\"Hijack\",\"scheduledAt\":\"2030-02-01T16:00:00Z\"}"))
+                .andExpect(status().isNotFound());
+
+        // Oversized prep notes are a validation error, not a silent truncation.
+        String tooLong = "x".repeat(20_001);
+        mockMvc.perform(post("/api/applications/" + appId + "/interviews")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"round\":\"Onsite\",\"scheduledAt\":\"2030-02-02T15:00:00Z\","
+                                + "\"prepNotes\":\"" + tooLong + "\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.fieldErrors.prepNotes").exists());
     }
 
     private void createApplication(String token, String company, String title, String location,

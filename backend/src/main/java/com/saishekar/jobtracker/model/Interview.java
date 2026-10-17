@@ -44,6 +44,14 @@ public class Interview {
 
     private String notes;
 
+    /**
+     * Markdown the candidate writes while preparing for the round. Stored as
+     * source and rendered client-side; the API never returns HTML, so stored
+     * markup cannot become stored XSS.
+     */
+    @Column(name = "prep_notes", columnDefinition = "TEXT")
+    private String prepNotes;
+
     protected Interview() {
     }
 
@@ -99,5 +107,13 @@ public class Interview {
 
     public void setNotes(String notes) {
         this.notes = notes;
+    }
+
+    public String getPrepNotes() {
+        return prepNotes;
+    }
+
+    public void setPrepNotes(String prepNotes) {
+        this.prepNotes = prepNotes;
     }
 }
