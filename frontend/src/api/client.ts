@@ -96,6 +96,17 @@ export interface InterviewPayload {
   prepNotes?: string;
 }
 
+/** A SCHEDULED round coming up soon, with its parent application named. */
+export interface UpcomingInterview {
+  id: number;
+  applicationId: number;
+  company: string;
+  title: string;
+  round: string;
+  scheduledAt: string;
+  interviewer: string | null;
+}
+
 export interface AnalyticsSummary {
   byStatus: Record<ApplicationStatus, number>;
   responseRate: { applied: number; responded: number; rate: number };
@@ -132,6 +143,30 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   }
   if (response.status === 204) return undefined as T;
   return (await response.json()) as T;
+}
+
+/** Authenticated file download: the JWT goes in a header, so a plain link cannot do this. */
+async function fetchBlob(path: string): Promise<Blob> {
+  const token = session.token();
+  const response = await fetch(path, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+  if (response.status === 401) {
+    session.clear();
+    throw new Error('Session expired — please log in again.');
+  }
+  if (!response.ok) throw new Error(`Download failed (${response.status})`);
+  return response.blob();
+}
+
+/** Saves a blob as a file via a temporary object URL. */
+export function saveBlob(blob: Blob, filename: string): void {
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  link.click();
+  URL.revokeObjectURL(url);
 }
 
 export const api = {
@@ -177,19 +212,9 @@ export const api = {
   deleteApplication: (id: number) =>
     request<void>(`/api/applications/${id}`, { method: 'DELETE' }),
 
-  // The export is a file download, not JSON, so it cannot go through request().
-  exportApplications: async (): Promise<Blob> => {
-    const token = session.token();
-    const response = await fetch('/api/applications/export', {
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
-    });
-    if (response.status === 401) {
-      session.clear();
-      throw new Error('Session expired — please log in again.');
-    }
-    if (!response.ok) throw new Error(`Export failed (${response.status})`);
-    return response.blob();
-  },
+  // File downloads are not JSON, so they cannot go through request();
+  // they share this blob fetch instead (CSV export, calendar exports).
+  exportApplications: async (): Promise<Blob> => fetchBlob('/api/applications/export'),
 
   // FormData sets its own multipart Content-Type; request() would force JSON.
   importApplications: async (file: File): Promise<{ imported: number }> => {
@@ -235,6 +260,14 @@ export const api = {
       method: 'PUT',
       body: JSON.stringify(payload),
     }),
+
+  upcomingInterviews: (withinHours = 168) =>
+    request<UpcomingInterview[]>(`/api/interviews/upcoming?withinHours=${withinHours}`),
+
+  downloadInterviewCalendar: (applicationId: number, interviewId: number) =>
+    fetchBlob(`/api/applications/${applicationId}/interviews/${interviewId}/calendar.ics`),
+
+  downloadInterviewsCalendar: () => fetchBlob('/api/interviews/calendar.ics'),
 
   analytics: () => request<AnalyticsSummary>('/api/analytics/summary'),
 };

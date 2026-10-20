@@ -1,10 +1,11 @@
 import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
-import { api, STATUSES } from '../api/client';
+import { api, saveBlob, STATUSES } from '../api/client';
 import type {
   ApplicationPayload,
   ApplicationStatus,
   JobApplication,
   StaleApplication,
+  UpcomingInterview,
 } from '../api/client';
 import ApplicationForm from '../components/ApplicationForm';
 import InterviewPanel from '../components/InterviewPanel';
@@ -12,6 +13,16 @@ import InterviewPanel from '../components/InterviewPanel';
 type Filter = ApplicationStatus | 'ALL';
 
 const PAGE_SIZE = 20;
+
+/** Short human lead time for the upcoming list: "in 3 hours", "tomorrow", "in 4 days". */
+function startsIn(scheduledAt: string): string {
+  const ms = new Date(scheduledAt).getTime() - Date.now();
+  const hours = Math.round(ms / 3_600_000);
+  if (hours < 1) return 'within the hour';
+  if (hours < 24) return `in ${hours} hour${hours === 1 ? '' : 's'}`;
+  const days = Math.round(hours / 24);
+  return days === 1 ? 'tomorrow' : `in ${days} days`;
+}
 
 export default function DashboardPage() {
   const [applications, setApplications] = useState<JobApplication[]>([]);
@@ -22,6 +33,7 @@ export default function DashboardPage() {
   const [totalPages, setTotalPages] = useState(0);
   const [totalElements, setTotalElements] = useState(0);
   const [stale, setStale] = useState<StaleApplication[]>([]);
+  const [upcoming, setUpcoming] = useState<UpcomingInterview[]>([]);
   const [editing, setEditing] = useState<JobApplication | null>(null);
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [showForm, setShowForm] = useState(false);
@@ -42,7 +54,7 @@ export default function DashboardPage() {
 
   const reload = useCallback(async () => {
     try {
-      const [result, staleResult] = await Promise.all([
+      const [result, staleResult, upcomingResult] = await Promise.all([
         api.listApplications({
           status: filter === 'ALL' ? undefined : filter,
           query: query || undefined,
@@ -52,11 +64,15 @@ export default function DashboardPage() {
         // The stale list is independent of the dashboard filter: a quiet
         // application needs a nudge even when the list is filtered away.
         api.staleApplications().catch(() => [] as StaleApplication[]),
+        // Same reasoning for the next week's rounds: they stay visible
+        // whatever the dashboard is filtered to.
+        api.upcomingInterviews().catch(() => [] as UpcomingInterview[]),
       ]);
       setApplications(result.content);
       setTotalPages(result.totalPages);
       setTotalElements(result.totalElements);
       setStale(staleResult);
+      setUpcoming(upcomingResult);
       setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load applications');
@@ -93,15 +109,19 @@ export default function DashboardPage() {
     setError(null);
     setNotice(null);
     try {
-      const blob = await api.exportApplications();
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = 'job-applications.csv';
-      link.click();
-      URL.revokeObjectURL(url);
+      saveBlob(await api.exportApplications(), 'job-applications.csv');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Export failed');
+    }
+  }
+
+  async function handleCalendarExport() {
+    setError(null);
+    setNotice(null);
+    try {
+      saveBlob(await api.downloadInterviewsCalendar(), 'job-tracker-interviews.ics');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Calendar export failed');
     }
   }
 
@@ -196,6 +216,33 @@ export default function DashboardPage() {
           </ul>
           <span className="muted small">
             Worth a follow-up, a status check, or closing out if the role has gone quiet.
+          </span>
+        </div>
+      )}
+
+      {upcoming.length > 0 && (
+        <div className="card upcoming-card" role="status">
+          <div className="row space-between">
+            <strong>
+              {upcoming.length} interview{upcoming.length === 1 ? '' : 's'} in the next
+              7 days
+            </strong>
+            <button className="secondary" onClick={() => void handleCalendarExport()}>
+              Export calendar (.ics)
+            </button>
+          </div>
+          <ul className="stale-list">
+            {upcoming.map((interview) => (
+              <li key={interview.id}>
+                {interview.round} — {interview.title} at {interview.company} (
+                {new Date(interview.scheduledAt).toLocaleString()},{' '}
+                {startsIn(interview.scheduledAt)}
+                {interview.interviewer ? `, with ${interview.interviewer}` : ''})
+              </li>
+            ))}
+          </ul>
+          <span className="muted small">
+            The .ics file carries a reminder one day and one hour before each round.
           </span>
         </div>
       )}

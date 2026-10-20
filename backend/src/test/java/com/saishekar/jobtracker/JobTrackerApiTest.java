@@ -416,6 +416,121 @@ class JobTrackerApiTest {
                 .andExpect(jsonPath("$.fieldErrors.prepNotes").exists());
     }
 
+    @Test
+    void upcomingInterviewsAndCalendarExport() throws Exception {
+        String token = register("upcoming@example.com");
+        Instant soon = Instant.now().plus(2, ChronoUnit.HOURS);
+        Instant later = Instant.now().plus(10, ChronoUnit.DAYS);
+        Instant past = Instant.now().minus(2, ChronoUnit.HOURS);
+
+        long firstApp = createApplicationReturningId(token, "Acme, Inc.; West", "Backend Engineer");
+        long secondApp = createApplicationReturningId(token, "Beta Health", "Frontend Engineer");
+
+        // Soon counts as upcoming; a round ten days out is outside a 48h
+        // window but inside a 30-day one; a past round and a cancelled
+        // round never count, on either application.
+        long soonId = createInterviewReturningId(token, firstApp, "Recruiter screen", soon, null);
+        createInterviewReturningId(token, firstApp, "Onsite loop", later, null);
+        createInterviewReturningId(token, secondApp, "Technical deep dive", past, null);
+        createInterviewReturningId(token, secondApp, "Hiring manager", soon, "CANCELLED");
+
+        mockMvc.perform(get("/api/interviews/upcoming").header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(1))
+                .andExpect(jsonPath("$[0].round").value("Recruiter screen"))
+                .andExpect(jsonPath("$[0].company").value("Acme, Inc.; West"))
+                .andExpect(jsonPath("$[0].applicationId").value(firstApp));
+        mockMvc.perform(get("/api/interviews/upcoming?withinHours=720")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(2))
+                .andExpect(jsonPath("$[1].round").value("Onsite loop"));
+
+        // Out-of-range windows are a client error, not a 500.
+        mockMvc.perform(get("/api/interviews/upcoming?withinHours=0")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isBadRequest());
+        mockMvc.perform(get("/api/interviews/upcoming?withinHours=721")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isBadRequest());
+
+        // Upcoming is owner-scoped.
+        String other = register("upcoming-other@example.com");
+        mockMvc.perform(get("/api/interviews/upcoming").header("Authorization", "Bearer " + other))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(0));
+
+        // The single-round export is a well-formed calendar: CRLF endings,
+        // a stable UID, UTC start/end one hour apart, both reminder alarms,
+        // and RFC 5545 escaping of the comma and semicolon in the company.
+        MvcResult single = mockMvc.perform(
+                        get("/api/applications/" + firstApp + "/interviews/" + soonId + "/calendar.ics")
+                                .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(content().contentTypeCompatibleWith("text/calendar"))
+                .andExpect(header().string("Content-Disposition",
+                        containsString("interview-" + soonId + ".ics")))
+                .andReturn();
+        String ics = single.getResponse().getContentAsString(StandardCharsets.UTF_8);
+        org.junit.jupiter.api.Assertions.assertTrue(ics.startsWith("BEGIN:VCALENDAR\r\n"), ics);
+        org.junit.jupiter.api.Assertions.assertTrue(ics.contains("UID:interview-" + soonId + "@job-tracker"), ics);
+        org.junit.jupiter.api.Assertions.assertTrue(
+                ics.contains("SUMMARY:Recruiter screen - Backend Engineer at Acme\\, Inc.\\; West"), ics);
+        org.junit.jupiter.api.Assertions.assertTrue(ics.contains("TRIGGER:-P1D"), ics);
+        org.junit.jupiter.api.Assertions.assertTrue(ics.contains("TRIGGER:-PT1H"), ics);
+        org.junit.jupiter.api.Assertions.assertFalse(ics.contains("\n\n"), ics);
+        for (String line : ics.split("\r\n")) {
+            org.junit.jupiter.api.Assertions.assertTrue(
+                    line.getBytes(StandardCharsets.UTF_8).length <= 75,
+                    "line exceeds 75 octets: " + line);
+        }
+
+        // The combined export holds both future rounds and neither the
+        // past one nor the cancelled one.
+        MvcResult all = mockMvc.perform(get("/api/interviews/calendar.ics")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Content-Disposition",
+                        containsString("job-tracker-interviews.ics")))
+                .andReturn();
+        String combined = all.getResponse().getContentAsString(StandardCharsets.UTF_8);
+        org.junit.jupiter.api.Assertions.assertEquals(2,
+                combined.split("BEGIN:VEVENT").length - 1, combined);
+        org.junit.jupiter.api.Assertions.assertFalse(combined.contains("Hiring manager"), combined);
+
+        // Another user cannot export someone else's round: 404, no leak.
+        mockMvc.perform(get("/api/applications/" + firstApp + "/interviews/" + soonId + "/calendar.ics")
+                        .header("Authorization", "Bearer " + other))
+                .andExpect(status().isNotFound());
+    }
+
+    private long createApplicationReturningId(String token, String company, String title)
+            throws Exception {
+        MvcResult created = mockMvc.perform(post("/api/applications")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"company\":\"" + company + "\",\"title\":\"" + title
+                                + "\",\"appliedDate\":\"" + LocalDate.now() + "\"}"))
+                .andExpect(status().isCreated())
+                .andReturn();
+        return objectMapper.readTree(created.getResponse().getContentAsString())
+                .get("id").asLong();
+    }
+
+    private long createInterviewReturningId(String token, long applicationId, String round,
+                                            Instant scheduledAt, String outcome) throws Exception {
+        String outcomeField = outcome == null ? "" : ",\"outcome\":\"" + outcome + "\"";
+        MvcResult created = mockMvc.perform(post("/api/applications/" + applicationId + "/interviews")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"round\":\"" + round + "\",\"scheduledAt\":\"" + scheduledAt
+                                + "\"" + outcomeField + "}"))
+                .andExpect(status().isCreated())
+                .andReturn();
+        return objectMapper.readTree(created.getResponse().getContentAsString())
+                .get("id").asLong();
+    }
+
     private void createApplication(String token, String company, String title, String location,
                                    String status) throws Exception {
         String body = """

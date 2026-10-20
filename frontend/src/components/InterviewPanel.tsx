@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { api, INTERVIEW_OUTCOMES } from '../api/client';
+import { api, INTERVIEW_OUTCOMES, saveBlob } from '../api/client';
 import type { Interview, InterviewOutcome, InterviewPayload } from '../api/client';
 import Markdown from './Markdown';
 
@@ -73,6 +73,17 @@ export default function InterviewPanel({ applicationId }: Props) {
     }
   }
 
+  async function handleCalendar(interview: Interview) {
+    try {
+      saveBlob(
+        await api.downloadInterviewCalendar(applicationId, interview.id),
+        `interview-${interview.id}.ics`,
+      );
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to download calendar file');
+    }
+  }
+
   async function handleSavePrep(interview: Interview) {
     try {
       await api.updateInterview(
@@ -116,6 +127,14 @@ export default function InterviewPanel({ applicationId }: Props) {
                   </option>
                 ))}
               </select>
+              {interview.outcome === 'SCHEDULED' && (
+                <button
+                  className="secondary"
+                  onClick={() => void handleCalendar(interview)}
+                >
+                  Calendar (.ics)
+                </button>
+              )}
             </span>
           </div>
 

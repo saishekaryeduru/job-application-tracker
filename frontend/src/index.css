@@ -94,6 +94,11 @@ label {
   background: #fffbeb;
 }
 
+.upcoming-card {
+  border-color: #93c5fd;
+  background: #eff6ff;
+}
+
 .stale-list {
   margin: 0.5rem 0;
   padding-left: 1.25rem;

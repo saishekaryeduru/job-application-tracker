@@ -42,4 +42,28 @@ public final class InterviewDtos {
                     interview.getPrepNotes());
         }
     }
+
+    /**
+     * One row of the cross-application upcoming list. Carries the parent
+     * application's company and title because a reminder that only says
+     * "Technical deep dive at 3pm" is not actionable on its own.
+     */
+    public record UpcomingInterviewResponse(
+            Long id,
+            Long applicationId,
+            String company,
+            String title,
+            String round,
+            Instant scheduledAt,
+            String interviewer) {
+
+        public static UpcomingInterviewResponse from(Interview interview) {
+            var app = interview.getApplication();
+            return new UpcomingInterviewResponse(
+                    interview.getId(), app.getId(),
+                    app.getCompany(), app.getTitle(),
+                    interview.getRound(), interview.getScheduledAt(),
+                    interview.getInterviewer());
+        }
+    }
 }
