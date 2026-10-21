@@ -1,6 +1,8 @@
 package com.saishekar.jobtracker.interview;
 
 import com.saishekar.jobtracker.model.Interview;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
@@ -15,9 +17,16 @@ public final class InterviewDtos {
     /** Prep notes are a working document, not a tweet: 20k chars is room for a full prep sheet. */
     public static final int MAX_PREP_NOTES_LENGTH = 20_000;
 
+    /** Shortest round worth scheduling; anything under 15 minutes is a data-entry slip. */
+    public static final int MIN_DURATION_MINUTES = 15;
+
+    /** Longest single block: a full-day onsite is eight hours, and longer than that is two rounds. */
+    public static final int MAX_DURATION_MINUTES = 480;
+
     public record InterviewRequest(
             @NotBlank @Size(max = 80) String round,
             @NotNull Instant scheduledAt,
+            @Min(MIN_DURATION_MINUTES) @Max(MAX_DURATION_MINUTES) Integer durationMinutes,
             @Size(max = 160) String interviewer,
             Interview.Outcome outcome,
             String notes,
@@ -29,6 +38,7 @@ public final class InterviewDtos {
             Long applicationId,
             String round,
             Instant scheduledAt,
+            int durationMinutes,
             String interviewer,
             Interview.Outcome outcome,
             String notes,
@@ -38,6 +48,7 @@ public final class InterviewDtos {
             return new InterviewResponse(
                     interview.getId(), interview.getApplication().getId(),
                     interview.getRound(), interview.getScheduledAt(),
+                    interview.getDurationMinutes(),
                     interview.getInterviewer(), interview.getOutcome(), interview.getNotes(),
                     interview.getPrepNotes());
         }
@@ -55,6 +66,7 @@ public final class InterviewDtos {
             String title,
             String round,
             Instant scheduledAt,
+            int durationMinutes,
             String interviewer) {
 
         public static UpcomingInterviewResponse from(Interview interview) {
@@ -63,6 +75,7 @@ public final class InterviewDtos {
                     interview.getId(), app.getId(),
                     app.getCompany(), app.getTitle(),
                     interview.getRound(), interview.getScheduledAt(),
+                    interview.getDurationMinutes(),
                     interview.getInterviewer());
         }
     }

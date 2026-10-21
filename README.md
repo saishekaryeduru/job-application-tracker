@@ -38,6 +38,10 @@ because "how is the search going?" deserves a data answer, not a feeling.
   soonest first. Any round — or every future round at once — exports as
   an RFC 5545 `.ics` file for Google/Apple/Outlook calendars, with a
   display reminder one day and one hour before each round.
+- **Per-round duration** — each round records its own length in minutes
+  (15–480, defaulting to 60): a 30-minute recruiter screen and a
+  four-hour onsite block export to the calendar as blocks of the right
+  size, and the upcoming list shows the length alongside the start time.
 - **Interview prep notes** — a Markdown prep sheet per round: focus areas,
   stories to rehearse, questions to ask the panel. Edited as source with a
   live preview; rendering supports headings, lists, emphasis, code, and
@@ -128,13 +132,19 @@ the only code that talks to JPA.
 - **Calendar export is generated, never stored.** An `.ics` file is a
   pure function of the rounds it covers, so it is built on request by a
   small hand-rolled RFC 5545 writer (TEXT escaping, CRLF endings,
-  75-octet line folding) instead of a calendar dependency. Interviews
-  store a start time but no end, so events export with a one-hour
-  duration rather than a guessed per-round length. Event UIDs are
+  75-octet line folding) instead of a calendar dependency. An event's
+  end is its start plus the round's recorded duration; rounds recorded
+  before durations existed carry the old one-hour default, so their
+  exports are unchanged. Event UIDs are
   stable (`interview-{id}@job-tracker`), so re-importing an updated
   export updates the existing events instead of duplicating them.
   Prep notes are deliberately excluded: they are a private working
   document, and calendar apps sync to other devices and accounts.
+- **An omitted duration means "unstated", not "one hour".** The field
+  is validated to 15–480 minutes when present, but a request that omits
+  it leaves the stored value alone — the same rule the outcome field
+  follows — so a client editing prep notes cannot silently reset a
+  30-minute screen back to the default length.
 - **Reminders only fire for rounds that can still happen.** The
   upcoming list and the combined calendar export include SCHEDULED
   rounds only — a round that already happened, was cancelled, or ended
@@ -221,7 +231,7 @@ All endpoints except `/api/auth/*` require `Authorization: Bearer <token>`.
 | GET | `/api/applications/{id}/interviews` | List interview rounds, including Markdown `prepNotes` |
 | POST | `/api/applications/{id}/interviews` | Schedule an interview round |
 | PUT | `/api/applications/{id}/interviews/{interviewId}` | Update a round (schedule, outcome, notes, prep notes; `prepNotes` capped at 20,000 chars) |
-| GET | `/api/applications/{id}/interviews/{interviewId}/calendar.ics` | Download one round as an `.ics` file (1-hour event, reminders 24h and 1h before) |
+| GET | `/api/applications/{id}/interviews/{interviewId}/calendar.ics` | Download one round as an `.ics` file (event length = the round's `durationMinutes`, reminders 24h and 1h before) |
 | GET | `/api/interviews/upcoming?withinHours=48` | My SCHEDULED rounds starting within `withinHours` (1–720, default 48), soonest first, with company and title |
 | GET | `/api/interviews/calendar.ics` | Download every future SCHEDULED round as one `.ics` file |
 | GET | `/api/analytics/summary` | byStatus + responseRate + weekly, in one call |
@@ -231,7 +241,6 @@ All endpoints except `/api/auth/*` require `Authorization: Bearer <token>`.
 
 ## Roadmap (v2 ideas)
 
-- Per-round duration instead of the fixed one-hour calendar default
 - A weekly digest view: rounds held, outcomes recorded, follow-ups due
 
 ## License

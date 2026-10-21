@@ -86,6 +86,12 @@ public class InterviewService {
     }
 
     private void apply(Interview interview, InterviewRequest request) {
+        // A null duration means "not stated": on create the entity default
+        // (one hour) stands, on update the recorded length is kept rather
+        // than silently reset by a client that only meant to edit prep notes.
+        if (request.durationMinutes() != null) {
+            interview.setDurationMinutes(request.durationMinutes());
+        }
         interview.setInterviewer(request.interviewer());
         // A null outcome means "not stated": on create the entity default
         // (SCHEDULED) stands, on update the recorded outcome is kept rather

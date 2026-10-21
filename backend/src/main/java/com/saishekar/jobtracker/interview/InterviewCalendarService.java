@@ -21,19 +21,15 @@ import java.util.List;
  * 75 octets.
  *
  * Two modelling choices are deliberate:
- * - Interviews store a start instant but no end, so every event is
- *   exported with a one-hour duration. Guessing per-round durations
- *   would put wrong blocks on the user's calendar; one hour is the
- *   conventional default and is easy to adjust after import.
+ * - The event end is the stored start plus the round's own duration.
+ *   Rounds created before durations were recorded carry the previous
+ *   one-hour default, so their exports are unchanged.
  * - Prep notes are never exported. They are a private working document
  *   (stories to rehearse, weaknesses to shore up), not calendar data,
  *   and calendar apps sync to other devices and accounts.
  */
 @Service
 public class InterviewCalendarService {
-
-    /** Assumed event length; interviews have no stored end time. */
-    static final long EVENT_DURATION_HOURS = 1;
 
     private static final DateTimeFormatter UTC_FORMAT =
             DateTimeFormatter.ofPattern("yyyyMMdd'T'HHmmss'Z'").withZone(ZoneOffset.UTC);
@@ -64,7 +60,7 @@ public class InterviewCalendarService {
     private void appendEvent(StringBuilder out, Interview interview, Instant stamp) {
         JobApplication app = interview.getApplication();
         Instant start = interview.getScheduledAt();
-        Instant end = start.plus(EVENT_DURATION_HOURS, ChronoUnit.HOURS);
+        Instant end = start.plus(interview.getDurationMinutes(), ChronoUnit.MINUTES);
 
         line(out, "BEGIN:VEVENT");
         // The id is database-unique and never reused, so the UID stays

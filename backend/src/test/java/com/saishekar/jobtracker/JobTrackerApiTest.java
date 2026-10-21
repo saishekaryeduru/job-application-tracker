@@ -16,6 +16,8 @@ import java.lang.reflect.Field;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.ZoneOffset;
+import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
 
 import static org.hamcrest.Matchers.containsString;
@@ -414,6 +416,75 @@ class JobTrackerApiTest {
                                 + "\"prepNotes\":\"" + tooLong + "\"}"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.fieldErrors.prepNotes").exists());
+    }
+
+    @Test
+    void interviewDurationDefaultsValidatesAndDrivesCalendarEnd() throws Exception {
+        String token = register("duration@example.com");
+        long appId = createApplicationReturningId(token, "Duration Co", "Backend Engineer");
+        Instant start = Instant.parse("2030-03-04T15:00:00Z");
+        String interviewsUrl = "/api/applications/" + appId + "/interviews";
+
+        // No duration stated: the one-hour default the calendar export
+        // used to assume for every round stands.
+        mockMvc.perform(post(interviewsUrl)
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"round\":\"Hiring manager\",\"scheduledAt\":\"" + start + "\"}"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.durationMinutes").value(60));
+
+        // A stated duration is stored and returned.
+        MvcResult created = mockMvc.perform(post(interviewsUrl)
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"round\":\"Recruiter screen\",\"scheduledAt\":\"" + start
+                                + "\",\"durationMinutes\":30}"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.durationMinutes").value(30))
+                .andReturn();
+        long screenId = objectMapper.readTree(created.getResponse().getContentAsString())
+                .get("id").asLong();
+
+        // The calendar export ends the event after the round's own
+        // duration, not after a fixed hour.
+        MvcResult single = mockMvc.perform(
+                        get(interviewsUrl + "/" + screenId + "/calendar.ics")
+                                .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andReturn();
+        String ics = single.getResponse().getContentAsString(StandardCharsets.UTF_8);
+        DateTimeFormatter utc = DateTimeFormatter.ofPattern("yyyyMMdd'T'HHmmss'Z'")
+                .withZone(ZoneOffset.UTC);
+        org.junit.jupiter.api.Assertions.assertTrue(
+                ics.contains("DTSTART:" + utc.format(start)), ics);
+        org.junit.jupiter.api.Assertions.assertTrue(
+                ics.contains("DTEND:" + utc.format(start.plus(30, ChronoUnit.MINUTES))), ics);
+
+        // Out-of-range durations are validation errors with per-field
+        // detail, not silent clamping: too short to be a real round, and
+        // longer than a full-day onsite block.
+        for (int bad : new int[] {10, 481}) {
+            mockMvc.perform(post(interviewsUrl)
+                            .header("Authorization", "Bearer " + token)
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"round\":\"Onsite\",\"scheduledAt\":\"" + start
+                                    + "\",\"durationMinutes\":" + bad + "}"))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.fieldErrors.durationMinutes").exists());
+        }
+
+        // An update that omits the duration keeps the recorded length —
+        // the same null-means-unstated rule the outcome already follows,
+        // so editing prep notes cannot reset a 30-minute screen to an hour.
+        mockMvc.perform(put(interviewsUrl + "/" + screenId)
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"round\":\"Recruiter screen\",\"scheduledAt\":\"" + start
+                                + "\",\"prepNotes\":\"Rehearse the caching story\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.durationMinutes").value(30))
+                .andExpect(jsonPath("$.prepNotes").value("Rehearse the caching story"));
     }
 
     @Test

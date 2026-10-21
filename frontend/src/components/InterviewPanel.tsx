@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { api, INTERVIEW_OUTCOMES, saveBlob } from '../api/client';
+import { api, formatDuration, INTERVIEW_OUTCOMES, saveBlob } from '../api/client';
 import type { Interview, InterviewOutcome, InterviewPayload } from '../api/client';
 import Markdown from './Markdown';
 
@@ -15,6 +15,7 @@ function toPayload(interview: Interview, changes: Partial<InterviewPayload>): In
   return {
     round: interview.round,
     scheduledAt: interview.scheduledAt,
+    durationMinutes: interview.durationMinutes,
     interviewer: interview.interviewer ?? undefined,
     outcome: interview.outcome,
     notes: interview.notes ?? undefined,
@@ -28,6 +29,7 @@ export default function InterviewPanel({ applicationId }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [round, setRound] = useState('');
   const [scheduledAt, setScheduledAt] = useState('');
+  const [durationMinutes, setDurationMinutes] = useState(60);
   const [interviewer, setInterviewer] = useState('');
   const [editingPrepId, setEditingPrepId] = useState<number | null>(null);
   const [prepDraft, setPrepDraft] = useState('');
@@ -53,10 +55,12 @@ export default function InterviewPanel({ applicationId }: Props) {
         // datetime-local has no zone; treat the entered time as local and
         // send the equivalent instant, which is what the API stores.
         scheduledAt: new Date(scheduledAt).toISOString(),
+        durationMinutes,
         interviewer: interviewer.trim() || undefined,
       });
       setRound('');
       setScheduledAt('');
+      setDurationMinutes(60);
       setInterviewer('');
       await reload();
     } catch (err) {
@@ -111,6 +115,7 @@ export default function InterviewPanel({ applicationId }: Props) {
             <span className="row">
               <span className="muted small">
                 {new Date(interview.scheduledAt).toLocaleString()}
+                {` · ${formatDuration(interview.durationMinutes)}`}
                 {interview.interviewer ? ` — ${interview.interviewer}` : ''}
               </span>
               <select
@@ -203,6 +208,18 @@ export default function InterviewPanel({ applicationId }: Props) {
             type="datetime-local"
             value={scheduledAt}
             onChange={(e) => setScheduledAt(e.target.value)}
+            required
+          />
+        </label>
+        <label>
+          Duration (minutes)
+          <input
+            type="number"
+            min={15}
+            max={480}
+            step={15}
+            value={durationMinutes}
+            onChange={(e) => setDurationMinutes(Number(e.target.value))}
             required
           />
         </label>

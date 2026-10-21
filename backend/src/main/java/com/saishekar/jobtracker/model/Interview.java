@@ -22,6 +22,9 @@ public class Interview {
         SCHEDULED, PASSED, FAILED, CANCELLED, NO_SHOW
     }
 
+    /** Length of a round in minutes when none is stated; the previous fixed calendar default. */
+    public static final int DEFAULT_DURATION_MINUTES = 60;
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
@@ -35,6 +38,10 @@ public class Interview {
 
     @Column(name = "scheduled_at", nullable = false)
     private Instant scheduledAt;
+
+    /** Length of the round in minutes; recruiter screens and onsite blocks are not the same size. */
+    @Column(name = "duration_minutes", nullable = false)
+    private int durationMinutes = DEFAULT_DURATION_MINUTES;
 
     private String interviewer;
 
@@ -83,6 +90,14 @@ public class Interview {
 
     public void setScheduledAt(Instant scheduledAt) {
         this.scheduledAt = scheduledAt;
+    }
+
+    public int getDurationMinutes() {
+        return durationMinutes;
+    }
+
+    public void setDurationMinutes(int durationMinutes) {
+        this.durationMinutes = durationMinutes;
     }
 
     public String getInterviewer() {

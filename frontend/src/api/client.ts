@@ -80,6 +80,7 @@ export interface Interview {
   applicationId: number;
   round: string;
   scheduledAt: string;
+  durationMinutes: number;
   interviewer: string | null;
   outcome: InterviewOutcome;
   notes: string | null;
@@ -90,10 +91,19 @@ export interface Interview {
 export interface InterviewPayload {
   round: string;
   scheduledAt: string;
+  durationMinutes?: number;
   interviewer?: string;
   outcome?: InterviewOutcome;
   notes?: string;
   prepNotes?: string;
+}
+
+/** "45 min" under an hour, "1 h" / "1 h 30 min" at and above it. */
+export function formatDuration(durationMinutes: number): string {
+  if (durationMinutes < 60) return `${durationMinutes} min`;
+  const hours = Math.floor(durationMinutes / 60);
+  const minutes = durationMinutes % 60;
+  return minutes === 0 ? `${hours} h` : `${hours} h ${minutes} min`;
 }
 
 /** A SCHEDULED round coming up soon, with its parent application named. */
@@ -104,6 +114,7 @@ export interface UpcomingInterview {
   title: string;
   round: string;
   scheduledAt: string;
+  durationMinutes: number;
   interviewer: string | null;
 }
 

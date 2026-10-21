@@ -1,5 +1,5 @@
 import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
-import { api, saveBlob, STATUSES } from '../api/client';
+import { api, formatDuration, saveBlob, STATUSES } from '../api/client';
 import type {
   ApplicationPayload,
   ApplicationStatus,
@@ -236,6 +236,7 @@ export default function DashboardPage() {
               <li key={interview.id}>
                 {interview.round} — {interview.title} at {interview.company} (
                 {new Date(interview.scheduledAt).toLocaleString()},{' '}
+                {formatDuration(interview.durationMinutes)},{' '}
                 {startsIn(interview.scheduledAt)}
                 {interview.interviewer ? `, with ${interview.interviewer}` : ''})
               </li>
