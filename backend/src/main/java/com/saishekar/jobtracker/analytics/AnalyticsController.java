@@ -2,6 +2,7 @@ package com.saishekar.jobtracker.analytics;
 
 import com.saishekar.jobtracker.analytics.AnalyticsService.ResponseRate;
 import com.saishekar.jobtracker.analytics.AnalyticsService.WeeklyCount;
+import com.saishekar.jobtracker.analytics.AnalyticsService.WeeklyDigest;
 import com.saishekar.jobtracker.model.ApplicationStatus;
 import com.saishekar.jobtracker.model.User;
 import com.saishekar.jobtracker.security.CurrentUser;
@@ -50,5 +51,10 @@ public class AnalyticsController {
     @GetMapping("/response-rate")
     public ResponseRate responseRate() {
         return analytics.responseRate(currentUser.require());
+    }
+
+    @GetMapping("/weekly-digest")
+    public WeeklyDigest weeklyDigest() {
+        return analytics.weeklyDigest(currentUser.require());
     }
 }

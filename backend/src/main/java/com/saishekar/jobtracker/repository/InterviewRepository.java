@@ -40,6 +40,23 @@ public interface InterviewRepository extends JpaRepository<Interview, Long> {
                                  @Param("from") Instant from,
                                  @Param("to") Instant to);
 
+    /**
+     * Interviews owned by one user whose start falls in {@code [from, to)},
+     * soonest first, with the parent application fetched so callers can
+     * read company and title without a second query per row.
+     */
+    @Query("""
+            SELECT i FROM Interview i
+            JOIN FETCH i.application a
+            WHERE a.owner = :owner
+              AND i.scheduledAt >= :from
+              AND i.scheduledAt < :to
+            ORDER BY i.scheduledAt ASC, i.id ASC
+            """)
+    List<Interview> findByOwnerAndScheduledAtBetween(@Param("owner") User owner,
+                                                     @Param("from") Instant from,
+                                                     @Param("to") Instant to);
+
     /** Every future SCHEDULED interview for one user, soonest first. */
     @Query("""
             SELECT i FROM Interview i

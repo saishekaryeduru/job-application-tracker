@@ -51,4 +51,8 @@ public interface JobApplicationRepository extends JpaRepository<JobApplication, 
     long countByOwnerAndStatus(User owner, ApplicationStatus status);
 
     long countByOwnerAndAppliedDateBetween(User owner, LocalDate from, LocalDate to);
+
+    /** Applications submitted inside a date range, in the dashboard's stable order. */
+    List<JobApplication> findByOwnerAndAppliedDateBetweenOrderByAppliedDateDescIdDesc(
+            User owner, LocalDate from, LocalDate to);
 }

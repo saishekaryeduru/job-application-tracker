@@ -124,6 +124,37 @@ export interface AnalyticsSummary {
   weekly: { weekStart: string; count: number }[];
 }
 
+export interface DigestApplication {
+  id: number;
+  company: string;
+  title: string;
+  status: ApplicationStatus;
+  appliedDate: string;
+}
+
+export interface DigestInterview {
+  id: number;
+  applicationId: number;
+  company: string;
+  title: string;
+  round: string;
+  scheduledAt: string;
+  outcome: InterviewOutcome;
+}
+
+/** The Monday-to-Sunday week containing today, as one view. */
+export interface WeeklyDigest {
+  weekStart: string;
+  weekEnd: string;
+  submitted: DigestApplication[];
+  roundsHeld: DigestInterview[];
+  outcomes: Record<InterviewOutcome, number>;
+  followUpsDue: StaleApplication[];
+  applicationsSubmitted: number;
+  roundsHeldCount: number;
+  followUpsDueCount: number;
+}
+
 const TOKEN_KEY = 'jobtracker.token';
 
 export const session = {
@@ -281,4 +312,6 @@ export const api = {
   downloadInterviewsCalendar: () => fetchBlob('/api/interviews/calendar.ics'),
 
   analytics: () => request<AnalyticsSummary>('/api/analytics/summary'),
+
+  weeklyDigest: () => request<WeeklyDigest>('/api/analytics/weekly-digest'),
 };

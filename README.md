@@ -49,6 +49,10 @@ because "how is the search going?" deserves a data answer, not a feeling.
 - **Analytics** — counts by status, applications per week for the last
   8 weeks, and response rate (share of applications that moved past
   "applied" into screening/interviewing/offer/rejected).
+- **Weekly digest** — one view of the current Monday-to-Sunday week:
+  applications submitted, rounds held with their outcomes recorded, and
+  follow-ups due (active applications with no movement in 10+ days), so
+  a week can be reviewed without piecing it together from three screens.
 - **Consistent API errors** — one JSON error shape everywhere, with per-field
   details on validation failures.
 - **One-command run** — Docker Compose brings up PostgreSQL, the API, and
@@ -74,7 +78,7 @@ backend/   Spring Boot API
   ├── security/    JWT filter, security config, current-user resolution
   ├── application/ application CRUD + status transitions
   ├── interview/   interview rounds, upcoming list, .ics calendar export
-  ├── analytics/   pipeline counts, weekly rate, response rate
+  ├── analytics/   pipeline counts, weekly rate, response rate, weekly digest
   ├── model/       JPA entities (User, JobApplication, Interview)
   ├── repository/  Spring Data repositories
   └── common/      ApiException + global exception handler (one error shape)
@@ -149,6 +153,15 @@ the only code that talks to JPA.
   upcoming list and the combined calendar export include SCHEDULED
   rounds only — a round that already happened, was cancelled, or ended
   in a no-show would otherwise keep reminding after it stopped mattering.
+- **The digest counts a round as held only when it happened.** PASSED,
+  FAILED, and NO_SHOW are held; SCHEDULED has not happened yet and
+  CANCELLED never will, so both appear only in the outcomes tally for
+  the week, not in the held list. The week is the Monday-to-Sunday week
+  containing today — the same Monday boundary the weekly counts use —
+  expressed for interviews as a half-open UTC range so a round at
+  midnight on Monday belongs to exactly one week. Follow-ups due reuse
+  the stale rule (active stages, 10+ days since `updatedAt`) rather
+  than inventing a second definition of "quiet".
 
 ## Running it locally
 
@@ -238,10 +251,12 @@ All endpoints except `/api/auth/*` require `Authorization: Bearer <token>`.
 | GET | `/api/analytics/by-status` | Counts per pipeline status |
 | GET | `/api/analytics/weekly?weeks=8` | Applications per week |
 | GET | `/api/analytics/response-rate` | Applied vs. responded and the rate |
+| GET | `/api/analytics/weekly-digest` | This week (Mon–Sun): `{weekStart, weekEnd, submitted, roundsHeld, outcomes, followUpsDue, applicationsSubmitted, roundsHeldCount, followUpsDueCount}`; held = PASSED/FAILED/NO_SHOW, follow-ups = active stages untouched 10+ days |
 
 ## Roadmap (v2 ideas)
 
-- A weekly digest view: rounds held, outcomes recorded, follow-ups due
+- Email the weekly digest on Monday morning for the week just ended
+- Filter the digest to a past week instead of only the current one
 
 ## License
 

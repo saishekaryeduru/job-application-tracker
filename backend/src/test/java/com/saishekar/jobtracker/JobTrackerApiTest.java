@@ -323,6 +323,67 @@ class JobTrackerApiTest {
     }
 
     @Test
+    void weeklyDigestCoversSubmissionsRoundsOutcomesAndFollowUps() throws Exception {
+        String token = register("digest@example.com");
+        Instant inWeek = Instant.now();
+        Instant lastWeek = Instant.now().minus(8, ChronoUnit.DAYS);
+
+        long heldApp = createApplicationReturningId(token, "Digest Held Co", "Backend Engineer");
+        long quietApp = createApplicationReturningId(token, "Digest Quiet Co", "Platform Engineer");
+        createApplication(token, "Digest Fresh Co", "Frontend Engineer", "Remote - US", "APPLIED");
+
+        // Two rounds were held this week, one is still scheduled, one was
+        // cancelled, and one held round from last week is out of scope.
+        createInterviewReturningId(token, heldApp, "Recruiter screen", inWeek, "PASSED");
+        createInterviewReturningId(token, heldApp, "Technical deep dive", inWeek, "FAILED");
+        createInterviewReturningId(token, heldApp, "Onsite loop", inWeek, null);
+        createInterviewReturningId(token, heldApp, "Hiring manager", inWeek, "CANCELLED");
+        createInterviewReturningId(token, heldApp, "Last week screen", lastWeek, "PASSED");
+
+        // Quiet Co has had no movement in 15 days, so it is a follow-up;
+        // the other applications were touched today and are not.
+        var owner = userRepository.findByEmail("digest@example.com").orElseThrow();
+        Field updatedAt = com.saishekar.jobtracker.model.JobApplication.class
+                .getDeclaredField("updatedAt");
+        updatedAt.setAccessible(true);
+        for (var app : applicationRepository.findAllByOwnerOrderByAppliedDateDescIdDesc(owner)) {
+            if (app.getCompany().equals("Digest Quiet Co")) {
+                updatedAt.set(app, Instant.now().minus(15, ChronoUnit.DAYS));
+                applicationRepository.save(app);
+            }
+        }
+
+        mockMvc.perform(get("/api/analytics/weekly-digest")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.weekStart").exists())
+                .andExpect(jsonPath("$.weekEnd").exists())
+                .andExpect(jsonPath("$.applicationsSubmitted").value(3))
+                .andExpect(jsonPath("$.submitted.length()").value(3))
+                .andExpect(jsonPath("$.roundsHeldCount").value(2))
+                .andExpect(jsonPath("$.roundsHeld.length()").value(2))
+                .andExpect(jsonPath("$.roundsHeld[0].company").value("Digest Held Co"))
+                .andExpect(jsonPath("$.outcomes.PASSED").value(1))
+                .andExpect(jsonPath("$.outcomes.FAILED").value(1))
+                .andExpect(jsonPath("$.outcomes.SCHEDULED").value(1))
+                .andExpect(jsonPath("$.outcomes.CANCELLED").value(1))
+                .andExpect(jsonPath("$.outcomes.NO_SHOW").value(0))
+                .andExpect(jsonPath("$.followUpsDueCount").value(1))
+                .andExpect(jsonPath("$.followUpsDue.length()").value(1))
+                .andExpect(jsonPath("$.followUpsDue[0].company").value("Digest Quiet Co"))
+                .andExpect(jsonPath("$.followUpsDue[0].daysStale").value(15));
+
+        // The digest is owner-scoped: another user sees an empty week.
+        String other = register("digest-other@example.com");
+        mockMvc.perform(get("/api/analytics/weekly-digest")
+                        .header("Authorization", "Bearer " + other))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.applicationsSubmitted").value(0))
+                .andExpect(jsonPath("$.roundsHeldCount").value(0))
+                .andExpect(jsonPath("$.followUpsDueCount").value(0));
+    }
+
+    @Test
     void duplicateRegistrationAndBadLoginAreRejected() throws Exception {
         register("dupe@example.com");
         mockMvc.perform(post("/api/auth/register")
