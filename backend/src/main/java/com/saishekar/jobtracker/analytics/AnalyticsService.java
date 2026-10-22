@@ -142,7 +142,8 @@ public class AnalyticsService {
                 .map(app -> ApplicationDtos.StaleApplicationResponse.from(app, now))
                 .toList();
 
-        return new WeeklyDigest(weekStart, weekEnd, submitted, roundsHeld, outcomes, followUpsDue);
+        return new WeeklyDigest(weekStart, weekEnd, submitted, roundsHeld, outcomes, followUpsDue,
+                submitted.size(), roundsHeld.size(), followUpsDue.size());
     }
 
     public record WeeklyCount(LocalDate weekStart, long count) {
@@ -163,18 +164,9 @@ public class AnalyticsService {
                                List<DigestApplication> submitted,
                                List<DigestInterview> roundsHeld,
                                Map<Interview.Outcome, Long> outcomes,
-                               List<ApplicationDtos.StaleApplicationResponse> followUpsDue) {
-
-        public long applicationsSubmitted() {
-            return submitted.size();
-        }
-
-        public long roundsHeldCount() {
-            return roundsHeld.size();
-        }
-
-        public long followUpsDueCount() {
-            return followUpsDue.size();
-        }
+                               List<ApplicationDtos.StaleApplicationResponse> followUpsDue,
+                               long applicationsSubmitted,
+                               long roundsHeldCount,
+                               long followUpsDueCount) {
     }
 }
