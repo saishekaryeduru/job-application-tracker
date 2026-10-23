@@ -1,6 +1,7 @@
 package com.saishekar.jobtracker.analytics;
 
 import com.saishekar.jobtracker.application.ApplicationDtos;
+import com.saishekar.jobtracker.common.ApiException;
 import com.saishekar.jobtracker.model.ApplicationStatus;
 import com.saishekar.jobtracker.model.Interview;
 import com.saishekar.jobtracker.model.User;
@@ -95,16 +96,34 @@ public class AnalyticsService {
         return new ResponseRate(applied, responded, rate);
     }
 
+    /** The digest for the week containing today. See {@link #weeklyDigest(User, LocalDate)}. */
+    public WeeklyDigest weeklyDigest(User owner) {
+        return weeklyDigest(owner, LocalDate.now());
+    }
+
     /**
-     * One week at a glance, for the Monday-to-Sunday week containing today:
-     * what was submitted, which rounds were held and how they ended, and
-     * which active applications have gone quiet enough to need a follow-up.
+     * One week at a glance, for the Monday-to-Sunday week containing
+     * {@code weekDate}: what was submitted, which rounds were held and how
+     * they ended, and which active applications have gone quiet enough to
+     * need a follow-up. Any date inside the week selects the same digest;
+     * the caller does not need to find the Monday itself. A week that has
+     * not started yet is a client error — there is nothing to review in it.
+     * <p>
+     * Follow-ups due are deliberately not historical. {@code updatedAt} is
+     * the only staleness signal stored, and it describes the record now,
+     * not at the end of a past week, so the section is always a snapshot
+     * as of this request even when the rest of the digest looks back.
      * The week window for interviews is the same Monday boundary the weekly
      * counts use, expressed as a half-open UTC instant range so a round at
      * exactly midnight on Monday belongs to exactly one week.
      */
-    public WeeklyDigest weeklyDigest(User owner) {
-        LocalDate weekStart = LocalDate.now().with(DayOfWeek.MONDAY);
+    public WeeklyDigest weeklyDigest(User owner, LocalDate weekDate) {
+        LocalDate reference = weekDate == null ? LocalDate.now() : weekDate;
+        LocalDate weekStart = reference.with(DayOfWeek.MONDAY);
+        LocalDate currentWeekStart = LocalDate.now().with(DayOfWeek.MONDAY);
+        if (weekStart.isAfter(currentWeekStart)) {
+            throw ApiException.badRequest("week must not be in the future");
+        }
         LocalDate weekEnd = weekStart.plusDays(6);
         Instant weekFrom = weekStart.atStartOfDay(ZoneOffset.UTC).toInstant();
         Instant weekTo = weekStart.plusWeeks(1).atStartOfDay(ZoneOffset.UTC).toInstant();

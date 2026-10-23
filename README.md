@@ -49,10 +49,12 @@ because "how is the search going?" deserves a data answer, not a feeling.
 - **Analytics** — counts by status, applications per week for the last
   8 weeks, and response rate (share of applications that moved past
   "applied" into screening/interviewing/offer/rejected).
-- **Weekly digest** — one view of the current Monday-to-Sunday week:
-  applications submitted, rounds held with their outcomes recorded, and
-  follow-ups due (active applications with no movement in 10+ days), so
-  a week can be reviewed without piecing it together from three screens.
+- **Weekly digest** — one view of a Monday-to-Sunday week: applications
+  submitted, rounds held with their outcomes recorded, and follow-ups
+  due (active applications with no movement in 10+ days), so a week can
+  be reviewed without piecing it together from three screens. Previous /
+  next controls step back through past weeks; follow-ups always show the
+  current snapshot (see Design decisions).
 - **Consistent API errors** — one JSON error shape everywhere, with per-field
   details on validation failures.
 - **One-command run** — Docker Compose brings up PostgreSQL, the API, and
@@ -156,12 +158,20 @@ the only code that talks to JPA.
 - **The digest counts a round as held only when it happened.** PASSED,
   FAILED, and NO_SHOW are held; SCHEDULED has not happened yet and
   CANCELLED never will, so both appear only in the outcomes tally for
-  the week, not in the held list. The week is the Monday-to-Sunday week
-  containing today — the same Monday boundary the weekly counts use —
-  expressed for interviews as a half-open UTC range so a round at
-  midnight on Monday belongs to exactly one week. Follow-ups due reuse
-  the stale rule (active stages, 10+ days since `updatedAt`) rather
-  than inventing a second definition of "quiet".
+  the week, not in the held list. The week is a Monday-to-Sunday week —
+  the same Monday boundary the weekly counts use — expressed for
+  interviews as a half-open UTC range so a round at midnight on Monday
+  belongs to exactly one week. Follow-ups due reuse the stale rule
+  (active stages, 10+ days since `updatedAt`) rather than inventing a
+  second definition of "quiet".
+- **A past-week digest is honest about what it cannot reconstruct.**
+  `?week=` takes any date inside the wanted week and snaps to its
+  Monday; a week that has not started yet is a 400, not an empty digest.
+  Submitted and held rounds are scoped to that week, but follow-ups due
+  stay a current snapshot: `updatedAt` is the only staleness signal
+  stored, and it describes the record now, not at the end of a past
+  week. The analytics page labels the section accordingly instead of
+  presenting today's quiet list as last week's.
 
 ## Running it locally
 
@@ -251,12 +261,11 @@ All endpoints except `/api/auth/*` require `Authorization: Bearer <token>`.
 | GET | `/api/analytics/by-status` | Counts per pipeline status |
 | GET | `/api/analytics/weekly?weeks=8` | Applications per week |
 | GET | `/api/analytics/response-rate` | Applied vs. responded and the rate |
-| GET | `/api/analytics/weekly-digest` | This week (Mon–Sun): `{weekStart, weekEnd, submitted, roundsHeld, outcomes, followUpsDue, applicationsSubmitted, roundsHeldCount, followUpsDueCount}`; held = PASSED/FAILED/NO_SHOW, follow-ups = active stages untouched 10+ days |
+| GET | `/api/analytics/weekly-digest?week=2026-10-12` | One week (Mon–Sun): `{weekStart, weekEnd, submitted, roundsHeld, outcomes, followUpsDue, applicationsSubmitted, roundsHeldCount, followUpsDueCount}`; `week` is any ISO date in the wanted week (default: current week; a future week is a 400); held = PASSED/FAILED/NO_SHOW, follow-ups = active stages untouched 10+ days (always as of now) |
 
 ## Roadmap (v2 ideas)
 
 - Email the weekly digest on Monday morning for the week just ended
-- Filter the digest to a past week instead of only the current one
 
 ## License
 

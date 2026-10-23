@@ -142,7 +142,7 @@ export interface DigestInterview {
   outcome: InterviewOutcome;
 }
 
-/** The Monday-to-Sunday week containing today, as one view. */
+/** A Monday-to-Sunday week as one view; the current week unless a past week is requested. */
 export interface WeeklyDigest {
   weekStart: string;
   weekEnd: string;
@@ -313,5 +313,10 @@ export const api = {
 
   analytics: () => request<AnalyticsSummary>('/api/analytics/summary'),
 
-  weeklyDigest: () => request<WeeklyDigest>('/api/analytics/weekly-digest'),
+  // Any ISO date inside the wanted week works; the API snaps it to that
+  // week's Monday. Omitting it returns the current week.
+  weeklyDigest: (week?: string) =>
+    request<WeeklyDigest>(
+      week ? `/api/analytics/weekly-digest?week=${encodeURIComponent(week)}` : '/api/analytics/weekly-digest',
+    ),
 };

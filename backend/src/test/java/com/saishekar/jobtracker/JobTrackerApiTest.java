@@ -384,6 +384,63 @@ class JobTrackerApiTest {
     }
 
     @Test
+    void weeklyDigestCanLookBackAtAPastWeek() throws Exception {
+        String token = register("digest-past@example.com");
+        // Monday of last week and a moment inside it. Dates are derived
+        // from today so the test holds on any weekday, including Monday
+        // itself, when "last week" is still seven days back.
+        LocalDate lastMonday = LocalDate.now().with(java.time.DayOfWeek.MONDAY).minusWeeks(1);
+        Instant lastWeekMoment = lastMonday.plusDays(2)
+                .atTime(15, 0).toInstant(ZoneOffset.UTC);
+
+        // One application applied last week, one applied today.
+        mockMvc.perform(post("/api/applications")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"company\":\"Past Week Co\",\"title\":\"Backend Engineer\","
+                                + "\"appliedDate\":\"" + lastMonday + "\"}"))
+                .andExpect(status().isCreated());
+        long currentApp = createApplicationReturningId(token, "Current Week Co", "Backend Engineer");
+
+        createInterviewReturningId(token, currentApp, "Last week screen", lastWeekMoment, "PASSED");
+        createInterviewReturningId(token, currentApp, "This week screen", Instant.now(), "PASSED");
+
+        // Without a parameter the digest is still the current week only.
+        mockMvc.perform(get("/api/analytics/weekly-digest")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.applicationsSubmitted").value(1))
+                .andExpect(jsonPath("$.submitted[0].company").value("Current Week Co"))
+                .andExpect(jsonPath("$.roundsHeldCount").value(1));
+
+        // Any date inside last week selects that whole Monday-Sunday week.
+        for (String anyDay : new String[] {lastMonday.toString(), lastMonday.plusDays(3).toString()}) {
+            mockMvc.perform(get("/api/analytics/weekly-digest?week=" + anyDay)
+                            .header("Authorization", "Bearer " + token))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.weekStart").value(lastMonday.toString()))
+                    .andExpect(jsonPath("$.weekEnd").value(lastMonday.plusDays(6).toString()))
+                    .andExpect(jsonPath("$.applicationsSubmitted").value(1))
+                    .andExpect(jsonPath("$.submitted[0].company").value("Past Week Co"))
+                    .andExpect(jsonPath("$.roundsHeldCount").value(1))
+                    .andExpect(jsonPath("$.roundsHeld[0].round").value("Last week screen"))
+                    .andExpect(jsonPath("$.outcomes.PASSED").value(1));
+        }
+
+        // A week that has not started yet and a malformed date are both
+        // client errors in the standard error shape, not empty digests.
+        String nextMonday = LocalDate.now().with(java.time.DayOfWeek.MONDAY).plusWeeks(1).toString();
+        mockMvc.perform(get("/api/analytics/weekly-digest?week=" + nextMonday)
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value(containsString("future")));
+        mockMvc.perform(get("/api/analytics/weekly-digest?week=not-a-date")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value(containsString("ISO date")));
+    }
+
+    @Test
     void duplicateRegistrationAndBadLoginAreRejected() throws Exception {
         register("dupe@example.com");
         mockMvc.perform(post("/api/auth/register")

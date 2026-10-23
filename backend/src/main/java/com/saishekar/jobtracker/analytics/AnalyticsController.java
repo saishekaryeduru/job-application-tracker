@@ -3,6 +3,7 @@ package com.saishekar.jobtracker.analytics;
 import com.saishekar.jobtracker.analytics.AnalyticsService.ResponseRate;
 import com.saishekar.jobtracker.analytics.AnalyticsService.WeeklyCount;
 import com.saishekar.jobtracker.analytics.AnalyticsService.WeeklyDigest;
+import com.saishekar.jobtracker.common.ApiException;
 import com.saishekar.jobtracker.model.ApplicationStatus;
 import com.saishekar.jobtracker.model.User;
 import com.saishekar.jobtracker.security.CurrentUser;
@@ -11,6 +12,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.time.LocalDate;
+import java.time.format.DateTimeParseException;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -53,8 +56,24 @@ public class AnalyticsController {
         return analytics.responseRate(currentUser.require());
     }
 
+    /**
+     * The weekly digest for the current week, or — with {@code ?week=} —
+     * for the Monday-to-Sunday week containing that ISO date. The date is
+     * parsed here rather than bound as a {@link LocalDate} so a malformed
+     * value returns the standard 400 error shape instead of a 500.
+     */
     @GetMapping("/weekly-digest")
-    public WeeklyDigest weeklyDigest() {
-        return analytics.weeklyDigest(currentUser.require());
+    public WeeklyDigest weeklyDigest(@RequestParam(required = false) String week) {
+        User owner = currentUser.require();
+        if (week == null || week.isBlank()) {
+            return analytics.weeklyDigest(owner);
+        }
+        LocalDate weekDate;
+        try {
+            weekDate = LocalDate.parse(week.trim());
+        } catch (DateTimeParseException ex) {
+            throw ApiException.badRequest("week must be an ISO date (yyyy-MM-dd)");
+        }
+        return analytics.weeklyDigest(owner, weekDate);
     }
 }
