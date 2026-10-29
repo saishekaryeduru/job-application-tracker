@@ -16,11 +16,27 @@ spring:
   flyway:
     enabled: true
     locations: classpath:db/migration
+  # Mail is only used by the weekly digest, and only when that is enabled
+  # below. With no MAIL_HOST set, no mail sender bean is created and the
+  # rest of the application is unaffected.
+  mail:
+    host: ${MAIL_HOST:}
+    port: ${MAIL_PORT:587}
+    username: ${MAIL_USERNAME:}
+    password: ${MAIL_PASSWORD:}
+    properties:
+      mail.smtp.auth: true
+      mail.smtp.starttls.enable: true
 
 server:
   port: 8080
 
 app:
+  digest:
+    email:
+      # Opt-in: the Monday digest job is only registered when this is true.
+      enabled: ${DIGEST_EMAIL_ENABLED:false}
+    from: ${DIGEST_FROM:no-reply@job-tracker.local}
   jwt:
     # Override in every real deployment; a long random string is required.
     secret: ${JWT_SECRET:dev-only-secret-change-me-dev-only-secret-change-me-0123456789}

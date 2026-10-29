@@ -55,6 +55,12 @@ because "how is the search going?" deserves a data answer, not a feeling.
   be reviewed without piecing it together from three screens. Previous /
   next controls step back through past weeks; follow-ups always show the
   current snapshot (see Design decisions).
+- **Weekly digest by email** — opt-in: when `DIGEST_EMAIL_ENABLED=true`
+  and an SMTP server is configured, a scheduler mails every user the
+  digest for the week just ended on Monday at 08:00 UTC. The email is
+  plain text rendered from the same digest the analytics page shows.
+  It is off by default and the app runs normally with no mail server
+  configured (see Running it locally).
 - **Consistent API errors** — one JSON error shape everywhere, with per-field
   details on validation failures.
 - **One-command run** — Docker Compose brings up PostgreSQL, the API, and
@@ -164,6 +170,17 @@ the only code that talks to JPA.
   belongs to exactly one week. Follow-ups due reuse the stale rule
   (active stages, 10+ days since `updatedAt`) rather than inventing a
   second definition of "quiet".
+- **The digest email is opt-in and failure-isolated.** The Monday job is
+  only registered when `app.digest.email.enabled` is true, so a
+  deployment without a mail server never wakes up to a run of failures.
+  The mail itself is rendered from the same `WeeklyDigest` record the
+  analytics endpoint returns — one computation, two presentations — and
+  the follow-ups section is headed "due now," because that snapshot is
+  current even in an email about last week. Sends go through a one-method
+  `DigestMailSender` interface so the rendering is testable without SMTP;
+  in the batch run, one user's failed send is logged and skipped rather
+  than stopping everyone else's digest, and no send runs inside a
+  database transaction, so a slow SMTP server cannot hold a connection.
 - **A past-week digest is honest about what it cannot reconstruct.**
   `?week=` takes any date inside the wanted week and snaps to its
   Monday; a week that has not started yet is a 400, not an empty digest.
@@ -189,6 +206,12 @@ only ever talks to one origin — no CORS setup and no build-time API URL.
 Data survives restarts in the `db-data` volume; `docker compose down -v`
 removes it. The manual setup below is the alternative for working on one
 tier at a time.
+
+To also receive the weekly digest by email, set `DIGEST_EMAIL_ENABLED=true`
+in `.env` together with a working `MAIL_HOST` / `MAIL_PORT` /
+`MAIL_USERNAME` / `MAIL_PASSWORD` and the `DIGEST_FROM` address to send
+from. The digest goes out Mondays at 08:00 UTC for the week that just
+ended. Without the flag, no mail is ever attempted.
 
 ### Backend (manual)
 
@@ -262,10 +285,6 @@ All endpoints except `/api/auth/*` require `Authorization: Bearer <token>`.
 | GET | `/api/analytics/weekly?weeks=8` | Applications per week |
 | GET | `/api/analytics/response-rate` | Applied vs. responded and the rate |
 | GET | `/api/analytics/weekly-digest?week=2026-10-12` | One week (Mon–Sun): `{weekStart, weekEnd, submitted, roundsHeld, outcomes, followUpsDue, applicationsSubmitted, roundsHeldCount, followUpsDueCount}`; `week` is any ISO date in the wanted week (default: current week; a future week is a 400); held = PASSED/FAILED/NO_SHOW, follow-ups = active stages untouched 10+ days (always as of now) |
-
-## Roadmap (v2 ideas)
-
-- Email the weekly digest on Monday morning for the week just ended
 
 ## License
 

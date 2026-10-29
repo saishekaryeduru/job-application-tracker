@@ -36,6 +36,14 @@ services:
       # stack runs out of the box locally; set a real secret in .env for
       # anything beyond a throwaway run.
       JWT_SECRET: ${JWT_SECRET:-dev-only-secret-change-me-dev-only-secret-change-me-0123456789}
+      # Weekly digest email: off unless .env opts in and names an SMTP
+      # server (see .env.example).
+      DIGEST_EMAIL_ENABLED: ${DIGEST_EMAIL_ENABLED:-false}
+      DIGEST_FROM: ${DIGEST_FROM:-no-reply@job-tracker.local}
+      MAIL_HOST: ${MAIL_HOST:-}
+      MAIL_PORT: ${MAIL_PORT:-587}
+      MAIL_USERNAME: ${MAIL_USERNAME:-}
+      MAIL_PASSWORD: ${MAIL_PASSWORD:-}
     ports:
       - "8080:8080"
     depends_on:
